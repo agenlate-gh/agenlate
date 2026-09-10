@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     run_max_turns: int = Field(default=25, gt=0)
     run_spend_cap_usd: float = Field(default=1.00, gt=0)
     run_stall_repeat_limit: int = Field(default=3, gt=1)
+    run_no_progress_limit: int = Field(default=3, gt=0)
+    run_unpriced_call_limit: int = Field(default=10, gt=0)
     run_tool_rounds_per_dispatch: int = Field(default=5, gt=0)
 
     @field_validator("supabase_url")

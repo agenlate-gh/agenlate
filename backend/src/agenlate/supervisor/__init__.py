@@ -19,14 +19,19 @@ from .prompt import (
     estimate_tokens,
     render_history,
 )
+from .limits import RunGuard, RunLimits, RunState, TerminationReason
 from .supervisor import Supervisor, SupervisorConfig, SupervisorError, SupervisorTurn
 
 __all__ = [
     "PromptBudget",
+    "RunGuard",
+    "RunLimits",
+    "RunState",
     "Supervisor",
     "SupervisorConfig",
     "SupervisorError",
     "SupervisorTurn",
+    "TerminationReason",
     "ObjectiveStatus",
     "SupervisorAction",
     "SupervisorDecision",
