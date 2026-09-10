@@ -114,6 +114,17 @@ Respond with the JSON object for your next decision.\
 
 EMPTY_TRANSCRIPT = "(nothing has happened yet — this is the first turn)"
 
+# A malformed reply can be long. Echoing all of it back costs tokens twice —
+# once to receive it, once to quote it — so only enough to locate the mistake
+# is returned.
+RAW_OUTPUT_ECHO_LIMIT = 1500
+
+REPAIR_TEMPLATE = """Your previous reply was not a valid decision.
+
+{error}
+
+Reply again with a single JSON object matching the schema, and nothing else. No explanation, no markdown fences, no commentary — only the JSON object."""
+
 
 def build_system_prompt(room: RoomWithAgents) -> str:
     """The Supervisor's standing instructions.
@@ -199,3 +210,23 @@ def build_supervisor_messages(
         build_system_prompt(room),
         [{"role": "user", "content": TRANSCRIPT_TEMPLATE.format(transcript=transcript)}],
     )
+
+
+def build_repair_messages(
+    original: list[dict[str, Any]], raw_output: str, error: str
+) -> list[dict[str, Any]]:
+    """Ask the model to correct a reply that failed validation.
+
+    The rejected output is shown back so the model can see what it actually
+    produced rather than what it intended, and the validation error is quoted
+    verbatim so the correction is specific rather than a re-roll.
+    """
+    echoed = raw_output[:RAW_OUTPUT_ECHO_LIMIT]
+    if len(raw_output) > RAW_OUTPUT_ECHO_LIMIT:
+        echoed += "\n[... truncated ...]"
+
+    return [
+        *original,
+        {"role": "assistant", "content": echoed},
+        {"role": "user", "content": REPAIR_TEMPLATE.format(error=error)},
+    ]

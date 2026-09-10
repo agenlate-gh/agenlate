@@ -15,15 +15,22 @@ from .prompt import (
     PromptBudget,
     build_supervisor_messages,
     build_system_prompt,
+    build_repair_messages,
     estimate_tokens,
     render_history,
 )
+from .supervisor import Supervisor, SupervisorConfig, SupervisorError, SupervisorTurn
 
 __all__ = [
     "PromptBudget",
+    "Supervisor",
+    "SupervisorConfig",
+    "SupervisorError",
+    "SupervisorTurn",
     "ObjectiveStatus",
     "SupervisorAction",
     "SupervisorDecision",
+    "build_repair_messages",
     "build_supervisor_messages",
     "build_system_prompt",
     "decision_json_schema",
