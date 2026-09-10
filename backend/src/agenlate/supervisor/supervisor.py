@@ -63,6 +63,9 @@ class SupervisorTurn:
     attempts: int
     """Model calls made, including repairs. One means the first reply stood."""
 
+    model: str = ""
+    """Which model produced it. Recorded so the ledger says what was billed."""
+
     @property
     def needed_repair(self) -> bool:
         return self.attempts > 1
@@ -108,7 +111,9 @@ class Supervisor:
                 request = build_repair_messages(request, raw, last_error)
                 continue
 
-            return SupervisorTurn(decision=decision, usage=usage, attempts=attempt)
+            return SupervisorTurn(
+                decision=decision, usage=usage, attempts=attempt, model=response.model
+            )
 
         raise SupervisorError(
             f"Supervisor produced no valid decision in {self._config.max_repair_attempts + 1} "
