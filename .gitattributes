@@ -1,0 +1,13 @@
+# Normalise line endings. You develop on Windows; Render builds on Linux.
+# Without this, CRLF leaks into the repo and breaks shell scripts at deploy time.
+* text=auto eol=lf
+
+# Binary — never touch these
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
