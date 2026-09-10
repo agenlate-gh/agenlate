@@ -56,6 +56,9 @@ class Agent(_Row):
     name: str
     role: str
     system_prompt: str
+    enabled_tools: list[str] | None = None
+    """Which server tools this agent may call. None means the defaults."""
+
     created_at: datetime
     updated_at: datetime
 
@@ -78,6 +81,7 @@ class AgentCreate(BaseModel):
     name: str = Field(min_length=1, max_length=NAME_MAX)
     role: str = Field(min_length=1, max_length=ROLE_MAX)
     system_prompt: str = Field(min_length=1, max_length=SYSTEM_PROMPT_MAX)
+    enabled_tools: list[str] | None = None
 
 
 class AgentUpdate(BaseModel):
@@ -86,6 +90,7 @@ class AgentUpdate(BaseModel):
     system_prompt: str | None = Field(
         default=None, min_length=1, max_length=SYSTEM_PROMPT_MAX
     )
+    enabled_tools: list[str] | None = None
 
 
 class Room(_Row):
@@ -172,6 +177,7 @@ class UsageEvent(_Row):
     completion_tokens: int = 0
     cost_usd: float | None = None
     is_priced: bool = False
+    server_tool_calls: int = 0
     provider_generation_id: str | None = None
     created_at: datetime
 
@@ -195,6 +201,7 @@ class UsageEventCreate(BaseModel):
     prompt_tokens: int = Field(default=0, ge=0)
     completion_tokens: int = Field(default=0, ge=0)
     cost_usd: float | None = Field(default=None, ge=0)
+    server_tool_calls: int = Field(default=0, ge=0)
     provider_generation_id: str | None = None
 
     @property

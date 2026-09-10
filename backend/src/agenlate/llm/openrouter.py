@@ -103,6 +103,7 @@ class OpenRouterClient(LLMClient):
         max_tokens: int | None = None,
         json_mode: bool = False,
         tools: list[dict[str, Any]] | None = None,
+        max_tool_calls: int | None = None,
     ) -> LLMResponse:
         payload: dict[str, Any] = {
             "model": self.model,
@@ -115,6 +116,10 @@ class OpenRouterClient(LLMClient):
             payload["response_format"] = {"type": "json_object"}
         if tools:
             payload["tools"] = tools
+            # Server-side step budget. Every step is billable, so this is the
+            # ceiling on what one agent turn can spend on tools.
+            if max_tool_calls is not None:
+                payload["max_tool_calls"] = max_tool_calls
 
         try:
             response = await self._client().post(
@@ -205,7 +210,20 @@ class OpenRouterClient(LLMClient):
             prompt_tokens=_as_int(raw.get("prompt_tokens")),
             completion_tokens=_as_int(raw.get("completion_tokens")),
             cost_usd=float(cost) if cost is not None else None,
+            server_tool_calls=_count_tool_use(raw.get("server_tool_use")),
         )
+
+
+def _count_tool_use(raw: Any) -> int:
+    """Total server tool steps from OpenRouter's per-tool counts.
+
+    Reported as a mapping such as {"web_search_requests": 2}. The individual
+    tool names are not enumerated here because new ones appear regularly and an
+    unknown key should still be counted rather than silently dropped.
+    """
+    if not isinstance(raw, dict):
+        return 0
+    return sum(_as_int(value) for value in raw.values())
 
 
 def _as_int(value: Any) -> int:

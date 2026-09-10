@@ -37,6 +37,14 @@ class Usage(BaseModel):
     cost_usd: float | None = Field(default=None, ge=0)
     calls: int = Field(default=0, ge=0)
     unpriced_calls: int = Field(default=0, ge=0)
+    server_tool_calls: int = Field(default=0, ge=0)
+    """Server tool steps OpenRouter executed for this request.
+
+    Reported separately from the token figures, and web search is priced per
+    result rather than per token. Whether those charges are already inside the
+    reported cost is undocumented, so the count is kept alongside it: if tool
+    calls rise while cost does not, the meter is missing real spending.
+    """
 
     @classmethod
     def for_call(
@@ -45,6 +53,7 @@ class Usage(BaseModel):
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
         cost_usd: float | None = None,
+        server_tool_calls: int = 0,
     ) -> "Usage":
         """Usage for a single provider response."""
         return cls(
@@ -53,6 +62,7 @@ class Usage(BaseModel):
             cost_usd=cost_usd,
             calls=1,
             unpriced_calls=0 if cost_usd is not None else 1,
+            server_tool_calls=server_tool_calls,
         )
 
     @property
@@ -85,6 +95,7 @@ class Usage(BaseModel):
             cost_usd=combined_cost,
             calls=self.calls + other.calls,
             unpriced_calls=self.unpriced_calls + other.unpriced_calls,
+            server_tool_calls=self.server_tool_calls + other.server_tool_calls,
         )
 
 
@@ -127,4 +138,5 @@ class LLMClient(Protocol):
         max_tokens: int | None = None,
         json_mode: bool = False,
         tools: list[dict[str, Any]] | None = None,
+        max_tool_calls: int | None = None,
     ) -> LLMResponse: ...

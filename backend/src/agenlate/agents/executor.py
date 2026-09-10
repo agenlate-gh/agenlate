@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from ..llm import LLMClient, Usage
 from ..models import Agent, Message
 from ..supervisor.prompt import PromptBudget, render_history
+from .tools import MAX_TOOL_CALLS, build_tool_payload
 
 AGENT_SYSTEM_TEMPLATE = """\
 {persona}
@@ -95,8 +96,13 @@ async def execute_agent(
     *,
     budget: PromptBudget | None = None,
     max_tokens: int | None = 2048,
+    max_tool_calls: int = MAX_TOOL_CALLS,
 ) -> AgentResult:
     """Run one agent turn.
+
+    One request, even when tools are used. OpenRouter runs the tool loop on its
+    own infrastructure and returns a finished answer, so there is no
+    client-side round tripping to manage here — and no sandbox for us to build.
 
     Provider failures propagate: the orchestrator decides what a failed turn
     means for the run, and swallowing it here would hide a dead key behind a
@@ -105,14 +111,20 @@ async def execute_agent(
     system, messages = build_agent_prompts(
         agent, instruction, objective, transcript, budget
     )
+    tools = build_tool_payload(agent.enabled_tools)
 
     response = await llm.complete(
         system=system,
         messages=messages,
         temperature=0.7,  # agents do the creative work; the Supervisor does not
         max_tokens=max_tokens,
+        tools=tools,
+        max_tool_calls=max_tool_calls if tools else None,
     )
 
     return AgentResult(
-        content=response.content.strip(), usage=response.usage, model=response.model
+        content=response.content.strip(),
+        usage=response.usage,
+        model=response.model,
+        tool_rounds=response.usage.server_tool_calls,
     )

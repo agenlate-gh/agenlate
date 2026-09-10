@@ -3,3 +3,7 @@
 from .executor import AgentResult, build_agent_prompts, execute_agent
 
 __all__ = ["AgentResult", "build_agent_prompts", "execute_agent"]
+
+from .tools import DEFAULT_TOOLS, KNOWN_TOOLS, build_tool_payload, resolve_tools
+
+__all__ += ["DEFAULT_TOOLS", "KNOWN_TOOLS", "build_tool_payload", "resolve_tools"]

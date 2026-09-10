@@ -165,6 +165,7 @@ async def run_room(
                     prompt_tokens=usage.prompt_tokens,
                     completion_tokens=usage.completion_tokens,
                     cost_usd=usage.cost_usd,
+                    server_tool_calls=usage.server_tool_calls,
                 )
             )
         return UsageReported(usage=usage, total=guard.state.usage)

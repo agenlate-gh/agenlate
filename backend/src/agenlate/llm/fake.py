@@ -52,6 +52,7 @@ class FakeLLM(LLMClient):
         max_tokens: int | None = None,
         json_mode: bool = False,
         tools: list[dict[str, Any]] | None = None,
+        max_tool_calls: int | None = None,
     ) -> LLMResponse:
         self.calls.append(
             {
@@ -61,6 +62,7 @@ class FakeLLM(LLMClient):
                 "max_tokens": max_tokens,
                 "json_mode": json_mode,
                 "tools": tools,
+                "max_tool_calls": max_tool_calls,
             }
         )
 
