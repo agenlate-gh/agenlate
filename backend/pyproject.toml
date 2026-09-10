@@ -30,3 +30,10 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Integration tests need a real Supabase project, so they are deselected by
+# default: the everyday suite runs with no credentials and no network.
+# Run them with: pytest -m integration
+addopts = "-m 'not integration'"
+markers = [
+    "integration: exercises a real Supabase project; needs credentials in .env",
+]
