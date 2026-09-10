@@ -32,3 +32,35 @@ class SupabaseRunStore:
     async def record(self, usage: Usage, context: UsageContext) -> None:
         """Record straight from provider figures, with the unpriced warning."""
         await record_usage(self._client, usage, context)
+
+
+class InMemoryRunStore:
+    """A RunStore that keeps everything in the process.
+
+    Used by the command line, which runs a room without an account. Nothing
+    here survives the process, which is the point: the CLI exists to exercise
+    orchestration, not to accumulate state.
+    """
+
+    def __init__(self, room_id: str) -> None:
+        self.room_id = room_id
+        self.messages: list[Message] = []
+        self.usage: list[UsageEventCreate] = []
+
+    async def append(self, message: MessageCreate) -> Message:
+        from datetime import datetime, timezone
+
+        stored = Message(
+            id=f"local-{len(self.messages) + 1}",
+            seq=len(self.messages) + 1,
+            room_id=message.room_id,
+            emitter=message.emitter,
+            emitter_name=message.emitter_name,
+            content=message.content,
+            created_at=datetime.now(timezone.utc),
+        )
+        self.messages.append(stored)
+        return stored
+
+    async def record_usage(self, event: UsageEventCreate) -> None:
+        self.usage.append(event)
