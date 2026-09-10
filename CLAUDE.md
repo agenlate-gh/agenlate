@@ -69,7 +69,7 @@ These are decisions, not preferences. Do not revert them while "improving" adjac
 
 ```bash
 # backend
-cd backend && uvicorn agenlate.main:app --reload
+cd backend && uvicorn agenlate.main:create_app --factory --reload
 cd backend && pytest
 
 # frontend

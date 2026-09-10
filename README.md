@@ -28,7 +28,7 @@ cp frontend/.env.example frontend/.env
 cd backend
 python -m venv .venv && source .venv/Scripts/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-uvicorn agenlate.main:app --reload                       # http://localhost:8000
+uvicorn agenlate.main:create_app --factory --reload      # http://localhost:8000
 pytest                                                    # runs with no API key and no network
 ```
 
