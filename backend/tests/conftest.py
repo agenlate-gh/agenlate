@@ -20,7 +20,6 @@ def settings() -> Settings:
         supabase_url="https://test.supabase.co",
         supabase_anon_key="test-anon-key",
         supabase_service_role_key="test-service-role-key",
-        supabase_jwt_secret="test-jwt-secret",
         api_env="development",
         api_cors_origins="http://localhost:5173",
     )

@@ -39,7 +39,9 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_anon_key: SecretStr
     supabase_service_role_key: SecretStr
-    supabase_jwt_secret: SecretStr
+    # No JWT secret. This project signs access tokens with ES256 and publishes
+    # the public keys at a JWKS endpoint, so the backend verifies signatures
+    # without holding anything able to mint them.
 
     # -- API ----------------------------------------------------------------
     api_env: Literal["development", "staging", "production"] = "development"

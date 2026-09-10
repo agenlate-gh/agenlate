@@ -11,7 +11,6 @@ REQUIRED = (
     "SUPABASE_URL",
     "SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
-    "SUPABASE_JWT_SECRET",
 )
 
 
@@ -58,7 +57,6 @@ def test_production_rejects_wildcard_cors() -> None:
             supabase_url="https://test.supabase.co",
             supabase_anon_key="k",
             supabase_service_role_key="k",
-            supabase_jwt_secret="k",
             api_env="production",
             api_cors_origins="*",
         )
@@ -70,7 +68,6 @@ def test_supabase_url_requires_a_scheme() -> None:
             supabase_url="test.supabase.co",
             supabase_anon_key="k",
             supabase_service_role_key="k",
-            supabase_jwt_secret="k",
         )
 
 
@@ -79,7 +76,6 @@ def test_supabase_url_trailing_slash_is_removed() -> None:
         supabase_url="https://test.supabase.co/",
         supabase_anon_key="k",
         supabase_service_role_key="k",
-        supabase_jwt_secret="k",
     )
 
     assert settings.supabase_url == "https://test.supabase.co"
@@ -91,6 +87,5 @@ def test_run_limits_must_be_positive() -> None:
             supabase_url="https://test.supabase.co",
             supabase_anon_key="k",
             supabase_service_role_key="k",
-            supabase_jwt_secret="k",
             run_max_turns=0,
         )
