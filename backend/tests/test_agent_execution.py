@@ -13,9 +13,10 @@ import pytest
 
 from agenlate.agents.executor import AgentResult, execute_agent
 from agenlate.agents.tools import (
+    DATETIME,
     DEFAULT_TOOLS,
     MAX_TOOL_CALLS,
-    SHELL,
+    UNSUPPORTED_ON_CHAT_COMPLETIONS,
     WEB_FETCH,
     WEB_SEARCH,
     build_tool_payload,
@@ -85,14 +86,24 @@ class TestToolSelection:
         assert resolve_tools([WEB_SEARCH, "openrouter:not_a_real_tool"]) == [WEB_SEARCH]
 
     def test_the_payload_uses_the_type_field(self) -> None:
-        payload = build_tool_payload([WEB_SEARCH, SHELL])
+        payload = build_tool_payload([WEB_SEARCH, WEB_FETCH])
 
-        assert payload == [{"type": WEB_SEARCH}, {"type": SHELL}]
+        assert payload == [{"type": WEB_SEARCH}, {"type": WEB_FETCH}]
 
-    def test_defaults_cover_research_and_computation(self) -> None:
+    def test_defaults_cover_research(self) -> None:
         assert WEB_SEARCH in DEFAULT_TOOLS
         assert WEB_FETCH in DEFAULT_TOOLS
-        assert SHELL in DEFAULT_TOOLS
+        assert DATETIME in DEFAULT_TOOLS
+
+    def test_tools_this_endpoint_rejects_are_dropped(self) -> None:
+        """chat-completions answers 400 for shell, bash, apply_patch and
+        tool_search. One of them anywhere in a request fails the whole call and
+        loses the agent's turn, so they never reach the wire."""
+        for tool in UNSUPPORTED_ON_CHAT_COMPLETIONS:
+            assert resolve_tools([WEB_SEARCH, tool]) == [WEB_SEARCH]
+
+    def test_no_default_is_a_tool_this_endpoint_rejects(self) -> None:
+        assert not set(DEFAULT_TOOLS) & UNSUPPORTED_ON_CHAT_COMPLETIONS
 
 
 class TestRequestShape:

@@ -36,7 +36,12 @@ out that instruction and report the result. Do not decide what the team should \
 do next, and do not address other members — report to the coordinator.
 
 Be concrete and complete. What you write is passed on to whoever works next, so \
-say what you found or produced rather than describing what you did.\
+say what you found or produced rather than describing what you did.
+
+You may have tools for searching the web and reading pages. Use them when the \
+task needs current or verifiable information rather than answering from memory, \
+and say where anything you report came from. If you have no tools, work from \
+what is already in the transcript and say plainly what you could not check.\
 """
 
 AGENT_TASK_TEMPLATE = """\

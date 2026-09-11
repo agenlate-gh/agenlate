@@ -38,12 +38,19 @@ class Usage(BaseModel):
     calls: int = Field(default=0, ge=0)
     unpriced_calls: int = Field(default=0, ge=0)
     server_tool_calls: int = Field(default=0, ge=0)
-    """Server tool steps OpenRouter executed for this request.
+    """Server tool steps OpenRouter executed, when it says.
 
-    Reported separately from the token figures, and web search is priced per
-    result rather than per token. Whether those charges are already inside the
-    reported cost is undocumented, so the count is kept alongside it: if tool
-    calls rise while cost does not, the meter is missing real spending.
+    Best effort, and often zero even when tools ran: ``server_tool_use`` came
+    back null on every request measured, including one where a web search
+    demonstrably executed. Do not treat this as a count of what happened.
+
+    It is kept because the cost question it was added to answer is now settled
+    the other way, and settled well. A free model with no tools reports a cost
+    of exactly zero; the same free model performing one real web search reports
+    $0.007. Since the model itself is free, that figure can only be the search
+    charge — so **tool charges are inside the reported cost**, and reading that
+    cost is enough. Tool volume, if it is ever needed, has to come from
+    somewhere else.
     """
 
     @classmethod

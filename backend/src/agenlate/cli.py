@@ -288,6 +288,9 @@ def _report(result, store: InMemoryRunStore) -> None:
     if result.final_message:
         print()
         print(_wrap(result.final_message, "    "))
+    if result.detail:
+        print()
+        print(_paint(_wrap(result.detail, "    "), "31"))
 
     print()
     print(_rule("accounting"))
@@ -306,18 +309,16 @@ def _report(result, store: InMemoryRunStore) -> None:
             f"    {usage.unpriced_calls} of {usage.calls} calls reported no cost, so the "
             "figure above is a floor, not a total.", "33"))
 
-    # The open question from the billing audit: web search is priced per result
-    # rather than per token, and OpenRouter does not document whether that
-    # charge is inside the reported cost. A run that used tools and still shows
-    # a cost consistent with tokens alone is the signal that it is not.
-    if usage.server_tool_calls and usage.cost_usd is not None:
+    # Tool charges are inside the reported cost: a free model with no tools
+    # reports exactly zero, and the same free model performing one web search
+    # reports $0.007. So the figure above already includes tool use. The step
+    # count is not reliable — server_tool_use is frequently null — which is why
+    # it is not used to reason about spending.
+    if usage.server_tool_calls:
         print()
         print(_paint(
-            f"    Tools ran {usage.server_tool_calls} step(s) and cost came back as "
-            f"${usage.cost_usd:.6f}.", "90"))
-        print(_paint(
-            "    Compare against a toolless run to see whether tool charges are "
-            "included.", "90"))
+            f"    {usage.server_tool_calls} tool step(s) reported. Tool charges are "
+            "included in the cost above.", "90"))
 
 
 # -- entry point ------------------------------------------------------------

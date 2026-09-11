@@ -118,6 +118,15 @@ class RunResult:
     final_message: str | None = None
     """What to show the user: the Supervisor's closing words, or why we stopped."""
 
+    detail: str | None = None
+    """The underlying failure, when there was one.
+
+    A run that ends in provider_failure has a reason the provider gave — an
+    invalid key, an unsupported parameter, a rate limit. Reporting only the
+    category tells the user to check their key when the cause was something
+    else entirely, and leaves them nothing to act on.
+    """
+
     @property
     def succeeded(self) -> bool:
         return self.reason.is_success
@@ -147,6 +156,7 @@ async def run_room(
     messages_added = 0
     reason: TerminationReason | None = None
     final_message: str | None = None
+    detail: str | None = None
 
     async def bill(usage: Usage, model: str, message_id: str | None) -> RunEvent:
         """Count a paid call against the guard and write it to the ledger.
@@ -179,11 +189,13 @@ async def run_room(
         # -- consult the Supervisor --------------------------------------
         try:
             turn = await supervisor.decide(room, history)
-        except LLMError:
+        except LLMError as exc:
             reason = TerminationReason.PROVIDER_FAILURE
+            detail = str(exc)
             break
-        except SupervisorError:
+        except SupervisorError as exc:
             reason = TerminationReason.SUPERVISOR_FAILURE
+            detail = str(exc)
             break
 
         decision = turn.decision
@@ -239,8 +251,9 @@ async def run_room(
                 history,
                 llm,
             )
-        except LLMError:
+        except LLMError as exc:
             reason = TerminationReason.PROVIDER_FAILURE
+            detail = str(exc)
             break
 
         spoke = await store.append(_agent_message(room.room.id, agent.name, result))
@@ -258,6 +271,7 @@ async def run_room(
             usage=guard.state.usage,
             messages_added=messages_added,
             final_message=final_message,
+            detail=detail,
         )
     )
 
