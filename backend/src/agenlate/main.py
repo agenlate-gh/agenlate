@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from . import __version__
+from .api import install as install_api
 from .config import Settings, get_settings
 
 
@@ -54,6 +55,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             version=__version__,
             environment=settings.api_env,
         )
+
+    install_api(app)
 
     app.state.settings = settings
     return app
