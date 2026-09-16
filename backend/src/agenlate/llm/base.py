@@ -146,6 +146,7 @@ class LLMClient(Protocol):
         json_mode: bool = False,
         tools: list[dict[str, Any]] | None = None,
         max_tool_calls: int | None = None,
+        reasoning: bool = False,
     ) -> LLMResponse: ...
 
     async def aclose(self) -> None:

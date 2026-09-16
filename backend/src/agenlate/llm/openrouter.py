@@ -104,6 +104,7 @@ class OpenRouterClient(LLMClient):
         json_mode: bool = False,
         tools: list[dict[str, Any]] | None = None,
         max_tool_calls: int | None = None,
+        reasoning: bool = False,
     ) -> LLMResponse:
         payload: dict[str, Any] = {
             "model": self.model,
@@ -114,6 +115,14 @@ class OpenRouterClient(LLMClient):
             payload["max_tokens"] = max_tokens
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
+        if not reasoning:
+            # Reasoning models spend output tokens on hidden deliberation, and
+            # those tokens bill at the completion rate. Measured: one model
+            # consumed its entire 200-token budget reasoning and returned no
+            # content at all — which reaches us as an agent that said nothing.
+            # Switching it off cut that call's cost by 19x and produced the
+            # answer. `effort: minimal` does not help; only disabling does.
+            payload["reasoning"] = {"enabled": False}
         if tools:
             payload["tools"] = tools
             # Server-side step budget. Every step is billable, so this is the

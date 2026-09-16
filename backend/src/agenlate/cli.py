@@ -56,6 +56,10 @@ EXAMPLE = {
                 "small business owners without jargon. You only state what the "
                 "research supports."
             ),
+            # No tools: works from what the researcher found. An agent
+            # with web access costs roughly 40x one without, because a
+            # single search dwarfs the token cost of the whole turn.
+            "enabled_tools": [],
         },
         {
             "name": "Critic",
@@ -65,6 +69,10 @@ EXAMPLE = {
                 "arguments and vague wording, and you say exactly what would fix "
                 "each one. You are specific rather than encouraging."
             ),
+            # No tools: works from what the researcher found. An agent
+            # with web access costs roughly 40x one without, because a
+            # single search dwarfs the token cost of the whole turn.
+            "enabled_tools": [],
         },
     ],
 }
