@@ -270,9 +270,7 @@ async def run(args) -> int:
             elif isinstance(event, RunFinished):
                 result = event.result
     finally:
-        close = getattr(llm, "aclose", None)
-        if close is not None:
-            await close()
+        await llm.aclose()
 
     assert result is not None
     _report(result, store)

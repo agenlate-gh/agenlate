@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 
-from . import agents, rooms
+from . import agents, rooms, runs
 from .errors import install_error_handlers
 
 
@@ -11,6 +11,7 @@ def install(app: FastAPI) -> None:
     install_error_handlers(app)
     app.include_router(agents.router)
     app.include_router(rooms.router)
+    app.include_router(runs.router)
 
 
 __all__ = ["install"]

@@ -84,6 +84,9 @@ class FakeLLM(LLMClient):
             model=self._model,
         )
 
+    async def aclose(self) -> None:
+        """Nothing to release. Present so callers need no special case."""
+
     # -- assertions -------------------------------------------------------
 
     @property

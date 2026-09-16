@@ -147,3 +147,12 @@ class LLMClient(Protocol):
         tools: list[dict[str, Any]] | None = None,
         max_tool_calls: int | None = None,
     ) -> LLMResponse: ...
+
+    async def aclose(self) -> None:
+        """Release whatever the client holds.
+
+        Part of the contract rather than an implementation detail: a caller
+        should not have to ask whether a client needs closing, and a fake that
+        cannot be closed diverges from the thing it stands in for.
+        """
+        ...
