@@ -28,6 +28,10 @@ AGENT = {
 }
 ROOM = {"name": "Blog post", "objective": "Write about coffee trends"}
 
+# Well-formed but not real. The endpoint checks a key's shape before starting a
+# run, so a short placeholder is now refused before the provider is reached.
+TEST_KEY = "sk-or-v1-" + "0123456789abcdef" * 3
+
 
 def dispatch(agent_id: str) -> str:
     return json.dumps(
@@ -106,7 +110,7 @@ def frames(body: str) -> list[tuple[str, dict]]:
 class TestAuthorisation:
     async def test_an_anonymous_caller_is_refused(self, api, room) -> None:
         response = await api.post(
-            f"/api/rooms/{room['id']}/run", json={"api_key": "sk-or-v1-x"}
+            f"/api/rooms/{room['id']}/run", json={"api_key": TEST_KEY}
         )
 
         assert response.status_code == 401
@@ -120,7 +124,7 @@ class TestAuthorisation:
 
         response = await api.post(
             f"/api/rooms/{room['id']}/run",
-            json={"api_key": "sk-or-v1-x"},
+            json={"api_key": TEST_KEY},
             headers=auth(bob_ready),
         )
 
@@ -143,7 +147,7 @@ class TestStreamingARun:
 
         response = await api.post(
             f"/api/rooms/{room['id']}/run",
-            json={"api_key": "sk-or-v1-test"},
+            json={"api_key": TEST_KEY},
             headers=auth(alice_ready),
         )
 
@@ -170,7 +174,7 @@ class TestStreamingARun:
 
         response = await api.post(
             f"/api/rooms/{room['id']}/run",
-            json={"api_key": "sk-or-v1-test"},
+            json={"api_key": TEST_KEY},
             headers=auth(alice_ready),
         )
 
@@ -187,7 +191,7 @@ class TestStreamingARun:
 
         response = await api.post(
             f"/api/rooms/{room['id']}/run",
-            json={"api_key": "sk-or-v1-test"},
+            json={"api_key": TEST_KEY},
             headers=auth(alice_ready),
         )
 
@@ -204,7 +208,7 @@ class TestStreamingARun:
 
         response = await api.post(
             f"/api/rooms/{room['id']}/run",
-            json={"api_key": "sk-or-v1-test"},
+            json={"api_key": TEST_KEY},
             headers=auth(alice_ready),
         )
 
@@ -221,7 +225,7 @@ class TestPersistence:
 
         await api.post(
             f"/api/rooms/{room['id']}/run",
-            json={"api_key": "sk-or-v1-test"},
+            json={"api_key": TEST_KEY},
             headers=auth(alice_ready),
         )
 
@@ -241,14 +245,14 @@ class TestPersistence:
         use_fake_provider(monkeypatch, [FINISH])
         await api.post(
             f"/api/rooms/{room['id']}/run",
-            json={"api_key": "sk-or-v1-test"},
+            json={"api_key": TEST_KEY},
             headers=auth(alice_ready),
         )
 
         fake = use_fake_provider(monkeypatch, [FINISH])
         await api.post(
             f"/api/rooms/{room['id']}/run",
-            json={"api_key": "sk-or-v1-test"},
+            json={"api_key": TEST_KEY},
             headers=auth(alice_ready),
         )
 
@@ -264,7 +268,7 @@ class TestLimits:
 
         response = await api.post(
             f"/api/rooms/{room['id']}/run",
-            json={"api_key": "sk-or-v1-test", "max_turns": 1},
+            json={"api_key": TEST_KEY, "max_turns": 1},
             headers=auth(alice_ready),
         )
 
@@ -275,7 +279,7 @@ class TestLimits:
     async def test_an_absurd_spend_cap_is_refused(self, api, room, alice_ready) -> None:
         response = await api.post(
             f"/api/rooms/{room['id']}/run",
-            json={"api_key": "sk-or-v1-test", "spend_cap_usd": 5000},
+            json={"api_key": TEST_KEY, "spend_cap_usd": 5000},
             headers=auth(alice_ready),
         )
 
@@ -312,3 +316,83 @@ class TestKeyHandling:
 
         assert response.status_code == 422
         assert key not in response.text
+
+
+class TestKeyValidationEndpoint:
+    """Checking a key at the point it is entered, rather than three turns into
+    a run the user has already set up."""
+
+    async def test_a_real_key_is_confirmed(self, api, alice_ready) -> None:
+        import io
+
+        env = {}
+        for line in io.open(".env", encoding="utf-8"):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip()
+        key = env.get("OPENROUTER_API_KEY")
+        if not key:
+            pytest.skip("needs OPENROUTER_API_KEY in backend/.env")
+
+        response = await api.post(
+            "/api/keys/validate", json={"api_key": key}, headers=auth(alice_ready)
+        )
+
+        assert response.status_code == 200
+        assert response.json()["valid"] is True
+
+    async def test_a_well_formed_but_wrong_key_is_rejected_kindly(
+        self, api, alice_ready
+    ) -> None:
+        """Right shape, not a real key: OpenRouter is asked rather than
+        guessed at."""
+        fake = "sk-or-v1-" + "0" * 48
+
+        response = await api.post(
+            "/api/keys/validate", json={"api_key": fake}, headers=auth(alice_ready)
+        )
+
+        assert response.status_code == 200
+        assert response.json()["valid"] is False
+        assert "key" in response.json()["message"].lower()
+
+    async def test_a_malformed_key_never_reaches_openrouter(
+        self, api, alice_ready
+    ) -> None:
+        response = await api.post(
+            "/api/keys/validate", json={"api_key": "clearly-not-a-key"},
+            headers=auth(alice_ready),
+        )
+
+        assert response.status_code == 422
+
+    async def test_validation_never_echoes_the_key(self, api, alice_ready) -> None:
+        key = "sk-distinctive-wrong-shaped-value-000000"
+
+        response = await api.post(
+            "/api/keys/validate", json={"api_key": key}, headers=auth(alice_ready)
+        )
+
+        assert response.status_code == 422
+        assert key not in response.text
+
+    async def test_the_endpoint_requires_a_signed_in_caller(self, api) -> None:
+        response = await api.post(
+            "/api/keys/validate", json={"api_key": "sk-or-v1-" + "0" * 48}
+        )
+
+        assert response.status_code == 401
+
+    async def test_a_malformed_key_is_refused_by_the_run_endpoint_too(
+        self, api, room, alice_ready
+    ) -> None:
+        """Validating at entry is a convenience; the run endpoint still has to
+        refuse, because nothing stops a client skipping the check."""
+        response = await api.post(
+            f"/api/rooms/{room['id']}/run",
+            json={"api_key": "nonsense"},
+            headers=auth(alice_ready),
+        )
+
+        assert response.status_code == 422
