@@ -10,17 +10,29 @@ The code is for the client to branch on; the message is for a person to read.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ..db import NotFoundError, RepositoryError
+from ..llm import (
+    LLMAuthError,
+    LLMCreditError,
+    LLMError,
+    LLMRateLimited,
+    LLMUnavailable,
+)
+from ..observability import REQUEST_ID_HEADER, current_request_id
 
 
 class ErrorBody(BaseModel):
     code: str
     message: str
+    request_id: str | None = None
+    """Quote this when reporting a problem; it finds the whole request."""
 
 
 class ErrorResponse(BaseModel):
@@ -40,12 +52,51 @@ _CODES = {
 
 
 def _envelope(status_code: int, message: str, code: str | None = None) -> JSONResponse:
-    return JSONResponse(
+    request_id = current_request_id()
+    response = JSONResponse(
         status_code=status_code,
         content={
-            "error": {"code": code or _CODES.get(status_code, "error"), "message": message}
+            "error": {
+                "code": code or _CODES.get(status_code, "error"),
+                "message": message,
+                "request_id": request_id,
+            }
         },
     )
+    if request_id:
+        response.headers[REQUEST_ID_HEADER] = request_id
+    return response
+
+
+# How a provider failure reaches a client that is not streaming. Each carries a
+# different instruction, because "check your key" is unhelpful when the key is
+# fine and the balance is empty.
+_PROVIDER_ERRORS: list[tuple[type[LLMError], int, str, str]] = [
+    (
+        LLMAuthError,
+        status.HTTP_400_BAD_REQUEST,
+        "key_rejected",
+        "OpenRouter rejected this key. Check it has not been revoked.",
+    ),
+    (
+        LLMCreditError,
+        status.HTTP_402_PAYMENT_REQUIRED,
+        "out_of_credit",
+        "This OpenRouter key has no credit left. Add credit or use a free model.",
+    ),
+    (
+        LLMRateLimited,
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        "rate_limited",
+        "The model provider is asking us to slow down. Try again in a moment.",
+    ),
+    (
+        LLMUnavailable,
+        status.HTTP_502_BAD_GATEWAY,
+        "provider_unavailable",
+        "The model provider could not be reached. This is not a problem with your account.",
+    ),
+]
 
 
 def install_error_handlers(app: FastAPI) -> None:
@@ -72,8 +123,26 @@ def install_error_handlers(app: FastAPI) -> None:
         # Confirming that a row exists but is not yours leaks its existence.
         return _envelope(status.HTTP_404_NOT_FOUND, "Not found")
 
+    @app.exception_handler(LLMError)
+    async def _provider(request: Request, exc: LLMError) -> JSONResponse:
+        for error_type, http_status, code, message in _PROVIDER_ERRORS:
+            if isinstance(exc, error_type):
+                logging.getLogger("agenlate.provider").warning(
+                    "provider error", extra={"error_code": code}
+                )
+                return _envelope(http_status, message, code)
+        logging.getLogger("agenlate.provider").warning("provider error")
+        return _envelope(
+            status.HTTP_502_BAD_GATEWAY,
+            "The model provider returned an error.",
+            "provider_error",
+        )
+
     @app.exception_handler(RepositoryError)
     async def _repository(request: Request, exc: RepositoryError) -> JSONResponse:
+        # Ours to fix, so it is logged at error level with the detail kept
+        # server-side. The client gets a request id and nothing else.
+        logging.getLogger("agenlate.repository").exception("database error")
         return _envelope(
-            status.HTTP_500_INTERNAL_SERVER_ERROR, "The database rejected the request"
+            status.HTTP_500_INTERNAL_SERVER_ERROR, "Something went wrong on our side."
         )

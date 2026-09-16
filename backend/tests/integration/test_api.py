@@ -410,3 +410,97 @@ class TestTranscriptPaging:
         )
 
         assert response.status_code == 422
+
+
+class TestUsageSummary:
+    """Phase 1 metrics. Deliberately does not lead with token volume: the same
+    room measured $0.000179 without web search and $0.007285 with it, so tokens
+    answer a question nobody has.
+    """
+
+    async def test_a_new_account_reports_nothing(self, api, alice_ready) -> None:
+        summary = (await api.get("/api/usage/summary", headers=auth(alice_ready))).json()
+
+        assert summary["requests"] == 0
+        assert summary["cost_usd"] == 0
+        assert summary["cost_is_complete"] is True
+
+    async def test_it_sums_this_users_own_usage(self, api, alice_db, alice_ready) -> None:
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        for cost in (0.01, 0.02):
+            await usage_repo.record_usage_event(
+                alice_db,
+                UsageEventCreate(
+                    user_id=alice_ready.id, model="m",
+                    prompt_tokens=100, completion_tokens=20, cost_usd=cost,
+                ),
+            )
+
+        summary = (await api.get("/api/usage/summary", headers=auth(alice_ready))).json()
+
+        assert summary["requests"] == 2
+        assert summary["cost_usd"] == pytest.approx(0.03)
+        assert summary["prompt_tokens"] == 200
+
+    async def test_unpriced_requests_mark_the_total_as_a_floor(
+        self, api, alice_db, alice_ready
+    ) -> None:
+        """Reporting a total as if it were complete would understate what the
+        user spent."""
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        await usage_repo.record_usage_event(
+            alice_db, UsageEventCreate(user_id=alice_ready.id, model="m", cost_usd=0.01)
+        )
+        await usage_repo.record_usage_event(
+            alice_db, UsageEventCreate(user_id=alice_ready.id, model="m", cost_usd=None)
+        )
+
+        summary = (await api.get("/api/usage/summary", headers=auth(alice_ready))).json()
+
+        assert summary["unpriced_requests"] == 1
+        assert summary["cost_is_complete"] is False
+        assert summary["cost_usd"] == pytest.approx(0.01)
+
+    async def test_tool_spending_is_reported_separately(
+        self, api, alice_db, alice_ready
+    ) -> None:
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        await usage_repo.record_usage_event(
+            alice_db,
+            UsageEventCreate(user_id=alice_ready.id, model="m", cost_usd=0.0002),
+        )
+        await usage_repo.record_usage_event(
+            alice_db,
+            UsageEventCreate(
+                user_id=alice_ready.id, model="m", cost_usd=0.0073, server_tool_calls=2
+            ),
+        )
+
+        summary = (await api.get("/api/usage/summary", headers=auth(alice_ready))).json()
+
+        assert summary["tool_enabled_requests"] == 1
+        assert summary["tool_enabled_cost_usd"] == pytest.approx(0.0073)
+
+    async def test_one_user_cannot_see_anothers_spending(
+        self, api, alice_db, alice_ready, bob_ready
+    ) -> None:
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        await usage_repo.record_usage_event(
+            alice_db, UsageEventCreate(user_id=alice_ready.id, model="m", cost_usd=5.0)
+        )
+
+        summary = (await api.get("/api/usage/summary", headers=auth(bob_ready))).json()
+
+        assert summary["requests"] == 0
+        assert summary["cost_usd"] == 0
+
+    async def test_it_requires_a_signed_in_caller(self, api) -> None:
+        assert (await api.get("/api/usage/summary")).status_code == 401

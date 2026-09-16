@@ -132,6 +132,27 @@ class LLMError(RuntimeError):
     """
 
 
+class LLMAuthError(LLMError):
+    """The key was rejected. The user must correct it; retrying will not help."""
+
+
+class LLMCreditError(LLMError):
+    """The key is valid but has no credit left.
+
+    Separate from an auth failure because the action is different: add credit
+    rather than check the key. Telling a user to check a key that is fine sends
+    them looking in the wrong place.
+    """
+
+
+class LLMRateLimited(LLMError):
+    """Too many requests. Unlike the others, waiting actually fixes this."""
+
+
+class LLMUnavailable(LLMError):
+    """The provider is down or unreachable. Nothing the user can do."""
+
+
 @runtime_checkable
 class LLMClient(Protocol):
     """The only surface the orchestration core depends on."""

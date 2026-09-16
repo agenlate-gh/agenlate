@@ -32,6 +32,9 @@ class TerminationReason(str, Enum):
     NO_PROGRESS = "no_progress"
     UNPRICED_CEILING = "unpriced_ceiling"
     PROVIDER_FAILURE = "provider_failure"
+    KEY_REJECTED = "key_rejected"
+    OUT_OF_CREDIT = "out_of_credit"
+    RATE_LIMITED = "rate_limited"
     SUPERVISOR_FAILURE = "supervisor_failure"
     CANCELLED = "cancelled"
 
@@ -93,8 +96,20 @@ _DESCRIPTIONS: dict[TerminationReason, str] = {
         "spending could no longer be tracked."
     ),
     TerminationReason.PROVIDER_FAILURE: (
-        "Stopped because the model provider returned an error. Check your "
-        "OpenRouter key and credit balance."
+        "Stopped because the model provider returned an error. The work so far "
+        "is saved."
+    ),
+    TerminationReason.KEY_REJECTED: (
+        "Your OpenRouter key was rejected. Check that it is correct and has not "
+        "been revoked, then try again."
+    ),
+    TerminationReason.OUT_OF_CREDIT: (
+        "Your OpenRouter account has no credit left. Add credit, or switch this "
+        "room to a free model, and the work so far will still be here."
+    ),
+    TerminationReason.RATE_LIMITED: (
+        "The model provider is asking us to slow down. Wait a minute and run "
+        "this again."
     ),
     TerminationReason.SUPERVISOR_FAILURE: (
         "Stopped because the supervisor could not produce a usable decision. "

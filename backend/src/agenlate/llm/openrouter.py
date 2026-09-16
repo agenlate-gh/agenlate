@@ -18,7 +18,16 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
-from .base import LLMClient, LLMError, LLMResponse, Usage
+from .base import (
+    LLMAuthError,
+    LLMClient,
+    LLMCreditError,
+    LLMError,
+    LLMRateLimited,
+    LLMResponse,
+    LLMUnavailable,
+    Usage,
+)
 
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -72,8 +81,24 @@ class OpenRouterClient(LLMClient):
         secret = self._api_key.get_secret_value()
         return text.replace(secret, "***") if secret in text else text
 
-    def _fail(self, message: str) -> LLMError:
-        return LLMError(self._scrub(message))
+    def _fail(self, message: str, status: int | None = None) -> LLMError:
+        """Raise the most specific error the status supports.
+
+        The distinction is not academic: a rejected key and an exhausted
+        balance need different things from the user, and a rate limit needs
+        only patience. Collapsing them into one error sends people looking in
+        the wrong place.
+        """
+        text = self._scrub(message)
+        if status == 401 or status == 403:
+            return LLMAuthError(text)
+        if status == 402:
+            return LLMCreditError(text)
+        if status == 429:
+            return LLMRateLimited(text)
+        if status is not None and status >= 500:
+            return LLMUnavailable(text)
+        return LLMError(text)
 
     def __repr__(self) -> str:
         return f"OpenRouterClient(model={self.model!r}, api_key=SecretStr('**********'))"
@@ -135,14 +160,18 @@ class OpenRouterClient(LLMClient):
                 ENDPOINT, json=payload, headers=self._headers()
             )
         except httpx.TimeoutException as exc:
-            raise self._fail(f"OpenRouter timed out after {self._timeout}s") from None
+            raise LLMUnavailable(
+                self._scrub(f"OpenRouter timed out after {self._timeout}s")
+            ) from None
         except httpx.HTTPError as exc:
             # `from None` rather than `from exc`: the chained traceback would
             # carry httpx's own request representation along with it.
-            raise self._fail(f"OpenRouter request failed: {type(exc).__name__}") from None
+            raise LLMUnavailable(
+                self._scrub(f"OpenRouter request failed: {type(exc).__name__}")
+            ) from None
 
         if response.status_code != 200:
-            raise self._fail(self._describe_failure(response))
+            raise self._fail(self._describe_failure(response), response.status_code)
 
         try:
             data = response.json()

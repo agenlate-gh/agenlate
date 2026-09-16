@@ -17,7 +17,14 @@ from dataclasses import dataclass, field
 from typing import AsyncIterator, Protocol
 
 from .agents.executor import AgentResult, execute_agent
-from .llm import LLMClient, LLMError, Usage
+from .llm import (
+    LLMAuthError,
+    LLMClient,
+    LLMCreditError,
+    LLMError,
+    LLMRateLimited,
+    Usage,
+)
 from .models import Emitter, Message, MessageCreate, RoomWithAgents, UsageEventCreate
 from .supervisor import (
     RunGuard,
@@ -29,6 +36,17 @@ from .supervisor import (
     TerminationReason,
 )
 from .supervisor.contract import SupervisorAction
+
+def _reason_for(error: LLMError) -> TerminationReason:
+    """Map a provider failure to what the user should do about it."""
+    if isinstance(error, LLMAuthError):
+        return TerminationReason.KEY_REJECTED
+    if isinstance(error, LLMCreditError):
+        return TerminationReason.OUT_OF_CREDIT
+    if isinstance(error, LLMRateLimited):
+        return TerminationReason.RATE_LIMITED
+    return TerminationReason.PROVIDER_FAILURE
+
 
 SUPERVISOR_NAME = "Supervisor"
 SYSTEM_NAME = "System"
@@ -191,7 +209,7 @@ async def run_room(
         try:
             turn = await supervisor.decide(room, history)
         except LLMError as exc:
-            reason = TerminationReason.PROVIDER_FAILURE
+            reason = _reason_for(exc)
             detail = str(exc)
             break
         except SupervisorError as exc:
@@ -260,7 +278,7 @@ async def run_room(
                 llm,
             )
         except LLMError as exc:
-            reason = TerminationReason.PROVIDER_FAILURE
+            reason = _reason_for(exc)
             detail = str(exc)
             break
 
