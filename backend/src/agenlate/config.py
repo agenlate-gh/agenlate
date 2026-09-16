@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     # User API keys are deliberately absent. Under BYOK the key arrives per-run
     # from the browser, lives in memory for that run, and is never persisted.
     openrouter_default_model: str = "anthropic/claude-sonnet-4.5"
-    openrouter_app_url: str = "https://agenlate.ai"
+    openrouter_app_url: str = "https://agenlate.com"
     openrouter_app_title: str = "Agenlate"
 
     # -- Run limits ---------------------------------------------------------

@@ -34,7 +34,7 @@ class OpenRouterClient(LLMClient):
         *,
         model: str = "anthropic/claude-sonnet-4.5",
         timeout: float = DEFAULT_TIMEOUT,
-        app_url: str = "https://agenlate.ai",
+        app_url: str = "https://agenlate.com",
         app_title: str = "Agenlate",
         http_client: httpx.AsyncClient | None = None,
     ) -> None:

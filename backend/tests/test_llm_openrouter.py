@@ -105,13 +105,13 @@ class TestSuccessfulCompletion:
     @respx.mock
     async def test_sends_attribution_headers(self) -> None:
         route = respx.post(ENDPOINT).mock(return_value=httpx.Response(200, json=completion()))
-        client = make_client(app_title="Agenlate", app_url="https://agenlate.ai")
+        client = make_client(app_title="Agenlate", app_url="https://agenlate.com")
 
         await call(client)
 
         headers = route.calls.last.request.headers
         assert headers["x-title"] == "Agenlate"
-        assert headers["http-referer"] == "https://agenlate.ai"
+        assert headers["http-referer"] == "https://agenlate.com"
         await client.aclose()
 
     @respx.mock
