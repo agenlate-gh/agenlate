@@ -1,0 +1,76 @@
+# Render blueprint.
+#
+# Describes the deployed services so they can be recreated rather than
+# remembered. Secrets are marked `sync: false`, which means Render prompts for
+# them in the dashboard and never reads them from this file — so this stays
+# committable.
+#
+# The frontend is deliberately absent until its stack is settled. It will be a
+# static site: those are free on Render and never sleep, unlike a web service.
+
+services:
+  - type: web
+    name: agenlate-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: backend
+
+    # The package installs itself; there is no requirements.txt by design, so
+    # dependencies live in one place.
+    buildCommand: pip install --upgrade pip && pip install -e .
+
+    # A factory rather than a module-level app: importing the module should not
+    # require a populated environment.
+    startCommand: uvicorn agenlate.main:create_app --factory --host 0.0.0.0 --port $PORT
+
+    healthCheckPath: /health
+
+    # Only rebuild when the backend changes. Without this, every frontend
+    # commit redeploys the API and burns free instance hours.
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+      - key: API_ENV
+        value: production
+
+      # Set once the frontend has a URL. Production refuses a wildcard, so this
+      # must name the real origin. Until then only local development can reach
+      # the API from a browser.
+      - key: API_CORS_ORIGINS
+        sync: false
+
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      # Bypasses row-level security entirely. Backend only, never the frontend.
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # No OpenRouter key here on purpose. Under BYOK the key arrives per run
+      # from the user's browser and is never read from configuration.
+      - key: OPENROUTER_APP_URL
+        value: https://agenlate.com
+      - key: OPENROUTER_APP_TITLE
+        value: Agenlate
+
+      # Termination guarantees. Every run stops for a named reason.
+      - key: RUN_MAX_TURNS
+        value: "25"
+      - key: RUN_SPEND_CAP_USD
+        value: "1.00"
+      - key: RUN_STALL_REPEAT_LIMIT
+        value: "3"
+      - key: RUN_NO_PROGRESS_LIMIT
+        value: "3"
+      - key: RUN_UNPRICED_CALL_LIMIT
+        value: "10"
+      - key: RUN_TOOL_ROUNDS_PER_DISPATCH
+        value: "5"

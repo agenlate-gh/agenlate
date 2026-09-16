@@ -27,6 +27,7 @@ from ..security import looks_like_openrouter_key
 from ..store import SupabaseRunStore
 from ..supervisor import RunLimits
 from .deps import settings_for, user_db
+from .limits import run_limiter
 from .sse import stream
 
 router = APIRouter(prefix="/api/rooms", tags=["runs"])
@@ -89,19 +90,26 @@ async def start_run(
         app_title=settings.openrouter_app_title,
     )
 
+    limiter = run_limiter()
+    # Checked before the response starts, so a refusal is a clean 429 rather
+    # than an error arriving mid-stream after the client has already been told
+    # the run began.
+    limiter.check(user.id)
+
     async def events():
         try:
-            async for event in stream(
-                run_room(
-                    room,
-                    transcript,
-                    llm,
-                    SupabaseRunStore(db),
-                    limits=limits,
-                    user_id=user.id,
-                )
-            ):
-                yield event
+            async with limiter.hold(user.id):
+                async for event in stream(
+                    run_room(
+                        room,
+                        transcript,
+                        llm,
+                        SupabaseRunStore(db),
+                        limits=limits,
+                        user_id=user.id,
+                    )
+                ):
+                    yield event
         finally:
             # Releases the connection pool, and drops the only reference this
             # process holds to the caller's key.
