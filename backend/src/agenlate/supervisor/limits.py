@@ -24,6 +24,7 @@ class TerminationReason(str, Enum):
     """Why a run ended. Exhaustive by design."""
 
     COMPLETED = "completed"
+    COMPLETED_EMPTY = "completed_empty"
     AWAITING_USER = "awaiting_user"
     MAX_TURNS = "max_turns"
     SPEND_CAP = "spend_cap"
@@ -64,6 +65,11 @@ _LIMIT_REASONS = frozenset(
 
 _DESCRIPTIONS: dict[TerminationReason, str] = {
     TerminationReason.COMPLETED: "The objective was achieved.",
+    TerminationReason.COMPLETED_EMPTY: (
+        "The run ended, but the last agent produced nothing, so the result is "
+        "probably incomplete. Try running it again, or give that agent a clearer "
+        "instruction."
+    ),
     TerminationReason.AWAITING_USER: "Your input is needed before this can continue.",
     TerminationReason.MAX_TURNS: (
         "Stopped after reaching the turn limit for this run. The work so far is "

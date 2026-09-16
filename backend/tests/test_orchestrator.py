@@ -362,6 +362,47 @@ class TestEmptyAgentOutput:
             for m in store.messages
         )
 
+    async def test_completing_right_after_silence_is_not_reported_as_success(
+        self,
+    ) -> None:
+        """Observed with a weaker model: an agent produced nothing and the
+        Supervisor declared the objective achieved. The user would be told it
+        worked and handed an empty result, which is worse than being told it
+        failed."""
+        llm = FakeLLM([dispatch("agent-1", "Write it"), "", finish()])
+
+        _, result = await drain(make_room(), llm, MemoryStore())
+
+        assert result.reason is TerminationReason.COMPLETED_EMPTY
+        assert result.succeeded is False
+        assert "incomplete" in result.reason.describe()
+
+    async def test_silence_earlier_in_a_run_does_not_taint_completion(self) -> None:
+        """Only the turn immediately before completion matters. An agent that
+        said nothing in the middle of a run that later produced real work is
+        not a reason to call the whole thing a failure."""
+        llm = FakeLLM(
+            [
+                dispatch("agent-1", "Research"),
+                "",
+                dispatch("agent-2", "Write it"),
+                "Here is the finished piece.",
+                finish(),
+            ]
+        )
+
+        _, result = await drain(make_room(), llm, MemoryStore())
+
+        assert result.reason is TerminationReason.COMPLETED
+        assert result.succeeded is True
+
+    async def test_awaiting_user_after_silence_keeps_its_own_reason(self) -> None:
+        llm = FakeLLM([dispatch("agent-1", "Research"), "", await_user()])
+
+        _, result = await drain(make_room(), llm, MemoryStore())
+
+        assert result.reason is TerminationReason.AWAITING_USER
+
     async def test_a_silent_turn_still_costs_money(self) -> None:
         llm = FakeLLM([dispatch("agent-1", "Research"), "", finish()])
 

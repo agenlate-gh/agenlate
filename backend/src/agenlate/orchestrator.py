@@ -157,6 +157,7 @@ async def run_room(
     reason: TerminationReason | None = None
     final_message: str | None = None
     detail: str | None = None
+    last_turn_was_silent = False
 
     async def bill(usage: Usage, model: str, message_id: str | None) -> RunEvent:
         """Count a paid call against the guard and write it to the ledger.
@@ -213,11 +214,18 @@ async def run_room(
         yield SupervisorDecided(decision=decision, message=note, attempts=turn.attempts)
 
         if decision.is_terminal:
-            reason = (
-                TerminationReason.COMPLETED
-                if decision.action is SupervisorAction.COMPLETE
-                else TerminationReason.AWAITING_USER
-            )
+            if decision.action is not SupervisorAction.COMPLETE:
+                reason = TerminationReason.AWAITING_USER
+            elif last_turn_was_silent:
+                # The Supervisor claimed success immediately after an agent
+                # produced nothing. Observed with a weaker model: the user is
+                # told the objective was achieved and receives an empty result,
+                # which is worse than being told it failed. The run still ends —
+                # another turn costs money on no evidence it would help — but it
+                # ends honestly.
+                reason = TerminationReason.COMPLETED_EMPTY
+            else:
+                reason = TerminationReason.COMPLETED
             final_message = decision.message_to_user
             break
 
@@ -262,6 +270,7 @@ async def run_room(
         yield await bill(result.usage, result.model, spoke.id)
         yield AgentSpoke(agent_id=agent.id, message=spoke)
 
+        last_turn_was_silent = result.is_empty
         guard.record_progress(0 if result.is_empty else 1)
 
     yield RunFinished(
