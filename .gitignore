@@ -22,6 +22,16 @@ frontend/dist/
 *.tsbuildinfo
 npm-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+
+# Next.js build output. .next/ runs to hundreds of megabytes and is rebuilt
+# from source every time, so committing it is both large and pointless.
+.next/
+out/
+next-env.d.ts
+
+# Vercel's local project link. Machine-specific.
+.vercel
 
 # Editors / OS
 .vscode/
