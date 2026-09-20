@@ -24,6 +24,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from ..llm import LLMClient, Usage
+from ..structured import extract_json
 from ..models import Message, RoomWithAgents
 from .contract import SupervisorDecision
 from .prompt import PromptBudget, build_repair_messages, build_supervisor_messages
@@ -121,7 +122,7 @@ class Supervisor:
         )
 
     def _parse(self, raw: str, valid_ids: set[str]) -> SupervisorDecision:
-        payload = _extract_json(raw)
+        payload = extract_json(raw)
         if payload is None:
             raise _InvalidDecision(
                 "The reply was not valid JSON. Return only a JSON object."
@@ -155,49 +156,3 @@ def _describe(error: ValidationError) -> str:
         location = ".".join(str(part) for part in item["loc"]) or "(root)"
         lines.append(f"- {location}: {item['msg']}")
     return "The reply did not match the schema:\n" + "\n".join(lines)
-
-
-def _extract_json(raw: str) -> dict[str, Any] | None:
-    """Recover a JSON object from a reply, without a round trip.
-
-    Three attempts, cheapest first. Every one of these saves a repair call, and
-    a repair call is charged to the user — so it is worth being generous here
-    and strict afterwards, since whatever comes out still has to pass the
-    schema.
-    """
-    text = raw.strip()
-    if not text:
-        return None
-
-    parsed = _try_json(text)
-    if parsed is not None:
-        return parsed
-
-    # Markdown fences, despite being asked for none.
-    if text.startswith("```"):
-        fenced = text.split("```")
-        if len(fenced) >= 2:
-            body = fenced[1]
-            if body.startswith("json"):
-                body = body[4:]
-            parsed = _try_json(body.strip())
-            if parsed is not None:
-                return parsed
-
-    # A JSON object wrapped in commentary.
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end > start:
-        parsed = _try_json(text[start : end + 1])
-        if parsed is not None:
-            return parsed
-
-    return None
-
-
-def _try_json(text: str) -> dict[str, Any] | None:
-    try:
-        value = json.loads(text)
-    except (ValueError, TypeError):
-        return None
-    return value if isinstance(value, dict) else None
