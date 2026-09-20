@@ -1,0 +1,44 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@theme inline {
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --radius: 0.5rem;
+}
+
+/* ==========================================================================
+   1. MODO OSCURO PREMIUM POR DEFECTO (:root - El Búnker Real de Alta Fidelidad)
+   ========================================================================== */
+:root {
+  color-scheme: dark;
+
+  --background: #0a0a0a;        /* Fondo búnker base principal */
+  --foreground: #ffffff;        /* Texto principal blanco puro */
+  
+  --card: #141414;              /* Paneles mate secundarios y tarjetas en carbón plano (#141414) */
+  --card-foreground: #ffffff;
+  --popover: #141414;
+  --popover-foreground: #ffffff;
+  
+  --primary: #fff41f;           /* ACENTO QUIRÚRGICO: Amarillo eléctrico solo para botones de acción principales y badges */
+  --primary-foreground: #0a0a0a;/* Texto sobre botón en negro búnker */
+  --accent: #fff41f;
+  --accent-foreground: #0a0a0a;
+  
+  --secondary: #1a1a1a;         /* Hover de agentes y filas secundarias */
+  --secondary-foreground: #ffffff;
+  --muted: #141414;
+  
+  /* CORRECCIÓN CRÍTICA DE TEXTOS SECUNDARIOS DEL MENU LATERAL E INDICADORES (FOTO DE REFERENCIA): */
+  --muted-foreground: #6b6b72;  /* Gris oscuro mate atenuado sofisticado para que las letras inactivas del menú y etiquetas secundarias descansen la vista */
+  --destructive: #ef4444;
+  
+  /* CORRECCIÓN CRÍTICA DE TODAS LAS LÍNEAS DIVISIONARIAS E INTERFACES DE LA PLATAFORMA: */
+  --border: #16161a;            /* Gris carbón ultra-oscuro casi invisible. Elimina por completo las líneas blancas chillonas de la rejilla en toda la web */
+  --input: #16161a;
+  --ring: #fff41f;
+  
+  --panel: #141414;             /* Left-sidebar en su color carbón mate limpio */
+  --panel-border: #16161a;      /* Micro-línea vertical derecha del sidebar completamente desvanecida en la penumbra */
+}
