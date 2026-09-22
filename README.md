@@ -6,7 +6,7 @@ Agenlate lets anyone build a team of AI workers by describing them in plain Engl
 
 ```
 backend/              FastAPI service — Supervisor, roundtable orchestration, usage recording
-frontend/             React + Vite + TypeScript + Tailwind
+frontend/             Next.js + TypeScript + Tailwind, deployed on Vercel
 supabase/migrations/  SQL schema and row-level security policies
 CLAUDE.md             Context and invariants for AI coding agents — read this first
 ```
@@ -36,8 +36,8 @@ pytest                                                    # runs with no API key
 
 ```bash
 cd frontend
-npm install
-npm run dev                                               # http://localhost:5173
+pnpm install
+pnpm dev                                                  # http://localhost:3000
 ```
 
 **Database**

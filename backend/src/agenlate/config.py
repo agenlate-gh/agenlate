@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 
     # -- API ----------------------------------------------------------------
     api_env: Literal["development", "staging", "production"] = "development"
-    api_cors_origins: str = "http://localhost:5173"
+    api_cors_origins: str = "http://localhost:3000"
 
     # -- OpenRouter ---------------------------------------------------------
     # User API keys are deliberately absent. Under BYOK the key arrives per-run

@@ -21,7 +21,7 @@ def settings() -> Settings:
         supabase_anon_key="test-anon-key",
         supabase_service_role_key="test-service-role-key",
         api_env="development",
-        api_cors_origins="http://localhost:5173",
+        api_cors_origins="http://localhost:3000",
     )
 
 
