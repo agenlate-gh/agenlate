@@ -23,6 +23,8 @@ export type Room = Schemas['RoomOut']
 export type RoomDetail = Schemas['RoomDetailOut']
 export type RoomInput = Schemas['RoomIn']
 export type RoomPatch = Schemas['RoomPatch']
+export type RoomStatus = Schemas['RoomStatus']
+export type RoomUsage = Schemas['RoomUsage']
 export type Message = Schemas['MessageOut']
 export type MessagePage = Schemas['MessagePage']
 export type Emitter = Schemas['Emitter']
@@ -64,12 +66,20 @@ export const agents = {
 // -- rooms ------------------------------------------------------------------
 
 export const rooms = {
-  list: () => api.get<Room[]>('/api/rooms'),
+  /** Newest first, each with its roster — the lobby draws both. */
+  list: () => api.get<RoomDetail[]>('/api/rooms'),
   get: (id: string) => api.get<RoomDetail>(`/api/rooms/${id}`),
   create: (input: RoomInput) => api.post<RoomDetail>('/api/rooms', input),
   update: (id: string, patch: RoomPatch) =>
     api.patch<Room>(`/api/rooms/${id}`, patch),
   remove: (id: string) => api.delete<void>(`/api/rooms/${id}`),
+
+  /**
+   * Pausing is not deleting. A paused room keeps its roster and its
+   * transcript; the API just refuses to start a run on it.
+   */
+  setStatus: (id: string, status: RoomStatus) =>
+    api.patch<Room>(`/api/rooms/${id}`, { status }),
 
   addAgent: (roomId: string, agentId: string) =>
     api.put<void>(`/api/rooms/${roomId}/agents/${agentId}`),
@@ -99,4 +109,11 @@ export const keys = {
 
 export const usage = {
   summary: (days = 30) => api.get<UsageSummary>(`/api/usage/summary?days=${days}`),
+
+  /**
+   * Per-room spending, for the lobby cards. One request for every room
+   * rather than one per room. Rooms that have never run are absent, so a
+   * caller reads a missing room as nothing spent.
+   */
+  byRoom: (days = 30) => api.get<RoomUsage[]>(`/api/usage/rooms?days=${days}`),
 }

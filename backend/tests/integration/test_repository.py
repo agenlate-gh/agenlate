@@ -123,9 +123,9 @@ class TestRooms:
         await make_room(alice_db, alice, "Older")
         newer = await make_room(alice_db, alice, "Newer")
 
-        listed = await rooms.list_rooms_for_user(alice_db, alice.id)
+        listed = await rooms.list_rooms_with_agents_for_user(alice_db, alice.id)
 
-        assert listed[0].id == newer.id
+        assert listed[0].room.id == newer.id
 
     async def test_update_and_delete(self, alice_db, alice) -> None:
         await seed_user(alice_db, alice)
@@ -372,7 +372,7 @@ class TestIsolationThroughTheRepository:
         alice_room = await make_room(alice_db, alice, "Alice private")
 
         assert await rooms.get_room(bob_db, alice_room.id) is None
-        assert await rooms.list_rooms_for_user(bob_db, alice.id) == []
+        assert await rooms.list_rooms_with_agents_for_user(bob_db, alice.id) == []
 
     async def test_one_user_cannot_read_anothers_agents(
         self, alice_db, alice, bob_db, bob

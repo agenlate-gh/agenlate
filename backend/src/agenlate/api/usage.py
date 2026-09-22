@@ -56,6 +56,75 @@ class UsageSummary(BaseModel):
     )
 
 
+class RoomUsage(BaseModel):
+    """What one room has cost its owner.
+
+    The lobby shows this on every card, so it is one request for every room
+    rather than one per room. Rooms with no recorded usage are absent, which
+    the caller reads as zero — storing a zero row for a room nobody has run
+    would be inventing a fact.
+    """
+
+    room_id: str
+    requests: int
+    cost_usd: float
+    unpriced_requests: int
+    cost_is_complete: bool
+    last_active_at: datetime | None
+
+
+@router.get("/rooms", response_model=list[RoomUsage])
+async def usage_by_room(
+    days: int = Query(default=30, ge=1, le=365),
+    user: CurrentUser = Depends(current_user),
+    db: AsyncClient = Depends(user_db),
+) -> list[RoomUsage]:
+    """Per-room spending over a window, most expensive first."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    rows = await execute(
+        db.table("usage_events")
+        .select("room_id,cost_usd,is_priced,created_at")
+        .eq("user_id", user.id)
+        .gte("created_at", since.isoformat()),
+        context="usage_by_room",
+    )
+
+    by_room: dict[str, list[dict]] = {}
+    for row in rows:
+        room_id = row.get("room_id")
+        if room_id:
+            by_room.setdefault(room_id, []).append(row)
+
+    summaries = [
+        RoomUsage(
+            room_id=room_id,
+            requests=len(events),
+            cost_usd=round(
+                sum(
+                    float(e["cost_usd"])
+                    for e in events
+                    if e.get("is_priced") and e.get("cost_usd") is not None
+                ),
+                6,
+            ),
+            unpriced_requests=sum(1 for e in events if not e.get("is_priced")),
+            cost_is_complete=all(e.get("is_priced") for e in events),
+            last_active_at=max(
+                (
+                    datetime.fromisoformat(e["created_at"])
+                    for e in events
+                    if e.get("created_at")
+                ),
+                default=None,
+            ),
+        )
+        for room_id, events in by_room.items()
+    ]
+    summaries.sort(key=lambda s: s.cost_usd, reverse=True)
+    return summaries
+
+
 @router.get("/summary", response_model=UsageSummary)
 async def usage_summary(
     days: int = Query(default=30, ge=1, le=365),

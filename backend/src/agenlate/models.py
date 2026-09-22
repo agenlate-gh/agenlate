@@ -93,6 +93,18 @@ class AgentUpdate(BaseModel):
     enabled_tools: list[str] | None = None
 
 
+class RoomStatus(str, Enum):
+    """Whether a room will accept a new run.
+
+    Pausing exists so that stopping the spending on a room does not mean
+    deleting it. A paused room keeps its roster and its transcript; it just
+    refuses to start.
+    """
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+
+
 class Room(_Row):
     """Table: rooms. One roundtable session working toward one objective."""
 
@@ -100,6 +112,7 @@ class Room(_Row):
     creator_id: str
     name: str
     objective: str
+    status: RoomStatus = RoomStatus.ACTIVE
     created_at: datetime
     updated_at: datetime
 
@@ -112,6 +125,7 @@ class RoomCreate(BaseModel):
 class RoomUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=ROOM_NAME_MAX)
     objective: str | None = Field(default=None, min_length=1, max_length=OBJECTIVE_MAX)
+    status: RoomStatus | None = None
 
 
 class RoomWithAgents(BaseModel):

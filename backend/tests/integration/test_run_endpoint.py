@@ -138,6 +138,48 @@ class TestAuthorisation:
         assert response.status_code == 422
 
 
+class TestPausedRooms:
+    async def test_a_paused_room_refuses_to_start(
+        self, api, room, alice_ready, monkeypatch
+    ) -> None:
+        """Refused before the response starts, so the caller is never told a
+        run began and then handed an error event."""
+        use_fake_provider(monkeypatch, [FINISH])
+        await api.patch(
+            f"/api/rooms/{room['id']}",
+            json={"status": "paused"},
+            headers=auth(alice_ready),
+        )
+
+        response = await api.post(
+            f"/api/rooms/{room['id']}/run",
+            json={"api_key": TEST_KEY},
+            headers=auth(alice_ready),
+        )
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "conflict"
+
+    async def test_resuming_lets_it_run_again(
+        self, api, room, alice_ready, monkeypatch
+    ) -> None:
+        use_fake_provider(monkeypatch, [FINISH])
+        for status_value in ("paused", "active"):
+            await api.patch(
+                f"/api/rooms/{room['id']}",
+                json={"status": status_value},
+                headers=auth(alice_ready),
+            )
+
+        response = await api.post(
+            f"/api/rooms/{room['id']}/run",
+            json={"api_key": TEST_KEY},
+            headers=auth(alice_ready),
+        )
+
+        assert response.status_code == 200
+
+
 class TestStreamingARun:
     async def test_a_complete_run_streams_and_finishes(
         self, api, room, alice_ready, monkeypatch

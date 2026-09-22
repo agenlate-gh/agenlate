@@ -65,6 +65,8 @@ class TestAuthenticationRequired:
             ("post", "/api/rooms"),
             ("get", "/api/rooms/some-id"),
             ("get", "/api/rooms/some-id/messages"),
+            ("get", "/api/usage/summary"),
+            ("get", "/api/usage/rooms"),
         ],
     )
     async def test_every_endpoint_refuses_an_anonymous_caller(
@@ -255,6 +257,69 @@ class TestRooms:
         assert (
             await api.delete(f"/api/rooms/{room['id']}", headers=auth(alice_ready))
         ).status_code == 204
+
+    async def test_a_new_room_is_active(self, api, alice_ready) -> None:
+        """A user who has just created a room means to use it."""
+        created = await api.post("/api/rooms", json=ROOM, headers=auth(alice_ready))
+
+        assert created.json()["status"] == "active"
+
+    async def test_a_room_can_be_paused_and_resumed(self, api, alice_ready) -> None:
+        room = (await api.post("/api/rooms", json=ROOM, headers=auth(alice_ready))).json()
+
+        paused = await api.patch(
+            f"/api/rooms/{room['id']}",
+            json={"status": "paused"},
+            headers=auth(alice_ready),
+        )
+        assert paused.json()["status"] == "paused"
+
+        resumed = await api.patch(
+            f"/api/rooms/{room['id']}",
+            json={"status": "active"},
+            headers=auth(alice_ready),
+        )
+        assert resumed.json()["status"] == "active"
+
+    async def test_pausing_leaves_everything_else_alone(
+        self, api, alice_ready
+    ) -> None:
+        """The point of pausing rather than deleting is that the room survives
+        it."""
+        agent = (
+            await api.post("/api/agents", json=AGENT, headers=auth(alice_ready))
+        ).json()
+        room = (
+            await api.post(
+                "/api/rooms",
+                json={**ROOM, "agent_ids": [agent["id"]]},
+                headers=auth(alice_ready),
+            )
+        ).json()
+
+        await api.patch(
+            f"/api/rooms/{room['id']}",
+            json={"status": "paused"},
+            headers=auth(alice_ready),
+        )
+
+        fetched = (
+            await api.get(f"/api/rooms/{room['id']}", headers=auth(alice_ready))
+        ).json()
+        assert fetched["name"] == room["name"]
+        assert fetched["objective"] == room["objective"]
+        assert [a["id"] for a in fetched["agents"]] == [agent["id"]]
+
+    async def test_an_unknown_status_is_refused(self, api, alice_ready) -> None:
+        room = (await api.post("/api/rooms", json=ROOM, headers=auth(alice_ready))).json()
+
+        response = await api.patch(
+            f"/api/rooms/{room['id']}",
+            json={"status": "archived"},
+            headers=auth(alice_ready),
+        )
+
+        assert response.status_code == 422
 
 
 class TestOneUserCannotReachAnother:
@@ -504,3 +569,105 @@ class TestUsageSummary:
 
     async def test_it_requires_a_signed_in_caller(self, api) -> None:
         assert (await api.get("/api/usage/summary")).status_code == 401
+
+
+class TestUsageByRoom:
+    """What the lobby shows on each card. One request for every room rather
+    than one per room."""
+
+    async def test_a_new_account_has_nothing_to_report(
+        self, api, alice_ready
+    ) -> None:
+        assert (await api.get("/api/usage/rooms", headers=auth(alice_ready))).json() == []
+
+    async def test_spending_is_attributed_to_the_room_that_caused_it(
+        self, api, alice_db, alice_ready
+    ) -> None:
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        cheap = (await api.post("/api/rooms", json=ROOM, headers=auth(alice_ready))).json()
+        dear = (
+            await api.post(
+                "/api/rooms", json={**ROOM, "name": "Expensive"}, headers=auth(alice_ready)
+            )
+        ).json()
+
+        await usage_repo.record_usage_event(
+            alice_db,
+            UsageEventCreate(
+                user_id=alice_ready.id, room_id=cheap["id"], model="m", cost_usd=0.01
+            ),
+        )
+        for _ in range(2):
+            await usage_repo.record_usage_event(
+                alice_db,
+                UsageEventCreate(
+                    user_id=alice_ready.id, room_id=dear["id"], model="m", cost_usd=0.25
+                ),
+            )
+
+        by_room = (
+            await api.get("/api/usage/rooms", headers=auth(alice_ready))
+        ).json()
+
+        # Most expensive first, so the lobby does not have to sort.
+        assert [r["room_id"] for r in by_room] == [dear["id"], cheap["id"]]
+        assert by_room[0]["cost_usd"] == pytest.approx(0.50)
+        assert by_room[0]["requests"] == 2
+        assert by_room[1]["cost_usd"] == pytest.approx(0.01)
+
+    async def test_a_room_that_has_never_run_is_absent(
+        self, api, alice_ready
+    ) -> None:
+        """Absent rather than zero. Recording a zero for a room nobody has run
+        would be inventing a fact; the caller reads a missing room as nothing
+        spent."""
+        await api.post("/api/rooms", json=ROOM, headers=auth(alice_ready))
+
+        assert (await api.get("/api/usage/rooms", headers=auth(alice_ready))).json() == []
+
+    async def test_an_unpriced_request_marks_that_room_incomplete(
+        self, api, alice_db, alice_ready
+    ) -> None:
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        room = (await api.post("/api/rooms", json=ROOM, headers=auth(alice_ready))).json()
+        await usage_repo.record_usage_event(
+            alice_db,
+            UsageEventCreate(
+                user_id=alice_ready.id, room_id=room["id"], model="m", cost_usd=0.01
+            ),
+        )
+        await usage_repo.record_usage_event(
+            alice_db,
+            UsageEventCreate(
+                user_id=alice_ready.id, room_id=room["id"], model="m", cost_usd=None
+            ),
+        )
+
+        entry = (await api.get("/api/usage/rooms", headers=auth(alice_ready))).json()[0]
+
+        assert entry["unpriced_requests"] == 1
+        assert entry["cost_is_complete"] is False
+        assert entry["cost_usd"] == pytest.approx(0.01)
+
+    async def test_one_user_cannot_see_anothers_rooms(
+        self, api, alice_db, alice_ready, bob_ready
+    ) -> None:
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        room = (await api.post("/api/rooms", json=ROOM, headers=auth(alice_ready))).json()
+        await usage_repo.record_usage_event(
+            alice_db,
+            UsageEventCreate(
+                user_id=alice_ready.id, room_id=room["id"], model="m", cost_usd=5.0
+            ),
+        )
+
+        assert (await api.get("/api/usage/rooms", headers=auth(bob_ready))).json() == []
+
+    async def test_it_requires_a_signed_in_caller(self, api) -> None:
+        assert (await api.get("/api/usage/rooms")).status_code == 401

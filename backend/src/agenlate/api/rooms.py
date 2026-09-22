@@ -18,11 +18,20 @@ router = APIRouter(prefix="/api/rooms", tags=["rooms"])
 MESSAGE_PAGE_MAX = 200
 
 
-@router.get("", response_model=list[RoomOut])
+@router.get("", response_model=list[RoomDetailOut])
 async def list_rooms(
     user: CurrentUser = Depends(current_user), db: AsyncClient = Depends(user_db)
-) -> list[RoomOut]:
-    return [RoomOut.of(r) for r in await repo.list_rooms_for_user(db, user.id)]
+) -> list[RoomDetailOut]:
+    """Every room this user owns, newest first, each with its roster.
+
+    The roster comes along because the lobby draws the agents on every card.
+    Returning bare rooms would make the first screen a user sees issue one
+    request per room to fill itself in.
+    """
+    return [
+        RoomDetailOut.of_detail(detail)
+        for detail in await repo.list_rooms_with_agents_for_user(db, user.id)
+    ]
 
 
 @router.post("", response_model=RoomDetailOut, status_code=status.HTTP_201_CREATED)
@@ -65,7 +74,9 @@ async def update_room(
     db: AsyncClient = Depends(user_db),
 ) -> RoomOut:
     room = await repo.update_room(
-        db, room_id, RoomUpdate(name=body.name, objective=body.objective)
+        db,
+        room_id,
+        RoomUpdate(name=body.name, objective=body.objective, status=body.status),
     )
     if room is None:
         raise NotFoundError(room_id)

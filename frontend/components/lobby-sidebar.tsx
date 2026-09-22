@@ -2,7 +2,10 @@
 
 import { LayoutDashboard, Key, CreditCard, LogOut } from 'lucide-react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
+
+import { useAuth } from '@/components/auth-provider'
 
 const meshLinks = [
   { label: 'Workspaces', icon: LayoutDashboard, href: '/lobby' },
@@ -12,9 +15,18 @@ const meshLinks = [
 
 export function LobbySidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { signOut } = useAuth()
+  const [signingOut, setSigningOut] = useState(false)
 
   function isActive(href: string) {
     return pathname === href
+  }
+
+  async function handleSignOut() {
+    setSigningOut(true)
+    await signOut()
+    router.replace('/login')
   }
 
   return (
@@ -43,13 +55,15 @@ export function LobbySidebar() {
 
       {/* Terminate Session */}
       <div className="border-t border-[#16161a] px-4 py-3">
-        <Link
-          href="#"
-          className="flex items-center gap-3 rounded-md px-3 py-2.5 text-[13px] font-medium text-[#DC2626]/90 transition-all hover:bg-[#FEF2F2] dark:text-[#ef4444]/80 dark:hover:bg-red-950/30"
+        <button
+          type="button"
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] font-medium text-[#DC2626]/90 transition-all hover:bg-[#FEF2F2] disabled:opacity-60 dark:text-[#ef4444]/80 dark:hover:bg-red-950/30"
         >
           <LogOut className="size-4" strokeWidth={1.5} />
-          Terminate Session
-        </Link>
+          {signingOut ? 'Signing out…' : 'Terminate Session'}
+        </button>
       </div>
     </aside>
   )

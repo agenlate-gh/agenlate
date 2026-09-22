@@ -23,6 +23,7 @@ from ..models import (
     Emitter,
     Message,
     Room,
+    RoomStatus,
     RoomWithAgents,
 )
 
@@ -110,12 +111,17 @@ class RoomIn(BaseModel):
 class RoomPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=ROOM_NAME_MAX)
     objective: str | None = Field(default=None, min_length=1, max_length=OBJECTIVE_MAX)
+    status: RoomStatus | None = Field(
+        default=None,
+        description="Set to paused to stop this room accepting new runs.",
+    )
 
 
 class RoomOut(BaseModel):
     id: str
     name: str
     objective: str
+    status: RoomStatus
     created_at: datetime
     updated_at: datetime
 
@@ -125,6 +131,7 @@ class RoomOut(BaseModel):
             id=room.id,
             name=room.name,
             objective=room.objective,
+            status=room.status,
             created_at=room.created_at,
             updated_at=room.updated_at,
         )

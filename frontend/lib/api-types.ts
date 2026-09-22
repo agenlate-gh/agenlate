@@ -65,7 +65,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Rooms */
+        /**
+         * List Rooms
+         * @description Every room this user owns, newest first, each with its roster.
+         *
+         *     The roster comes along because the lobby draws the agents on every card.
+         *     Returning bare rooms would make the first screen a user sees issue one
+         *     request per room to fill itself in.
+         */
         get: operations["list_rooms_api_rooms_get"];
         put?: never;
         /** Create Room */
@@ -176,6 +183,26 @@ export interface paths {
          * @description Ask OpenRouter whether this key works. Runs no inference.
          */
         post: operations["validate_key_api_keys_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage/rooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usage By Room
+         * @description Per-room spending over a window, most expensive first.
+         */
+        get: operations["usage_by_room_api_usage_rooms_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -406,6 +433,7 @@ export interface components {
             name: string;
             /** Objective */
             objective: string;
+            status: components["schemas"]["RoomStatus"];
             /**
              * Created At
              * Format: date-time
@@ -439,6 +467,7 @@ export interface components {
             name: string;
             /** Objective */
             objective: string;
+            status: components["schemas"]["RoomStatus"];
             /**
              * Created At
              * Format: date-time
@@ -456,6 +485,41 @@ export interface components {
             name?: string | null;
             /** Objective */
             objective?: string | null;
+            /** @description Set to paused to stop this room accepting new runs. */
+            status?: components["schemas"]["RoomStatus"] | null;
+        };
+        /**
+         * RoomStatus
+         * @description Whether a room will accept a new run.
+         *
+         *     Pausing exists so that stopping the spending on a room does not mean
+         *     deleting it. A paused room keeps its roster and its transcript; it just
+         *     refuses to start.
+         * @enum {string}
+         */
+        RoomStatus: "active" | "paused";
+        /**
+         * RoomUsage
+         * @description What one room has cost its owner.
+         *
+         *     The lobby shows this on every card, so it is one request for every room
+         *     rather than one per room. Rooms with no recorded usage are absent, which
+         *     the caller reads as zero — storing a zero row for a room nobody has run
+         *     would be inventing a fact.
+         */
+        RoomUsage: {
+            /** Room Id */
+            room_id: string;
+            /** Requests */
+            requests: number;
+            /** Cost Usd */
+            cost_usd: number;
+            /** Unpriced Requests */
+            unpriced_requests: number;
+            /** Cost Is Complete */
+            cost_is_complete: boolean;
+            /** Last Active At */
+            last_active_at: string | null;
         };
         /**
          * RunRequest
@@ -731,7 +795,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RoomOut"][];
+                    "application/json": components["schemas"]["RoomDetailOut"][];
                 };
             };
         };
@@ -1013,6 +1077,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KeyCheckResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    usage_by_room_api_usage_rooms_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomUsage"][];
                 };
             };
             /** @description Validation Error */

@@ -12,7 +12,7 @@ logged, and not cached.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, SecretStr, field_validator
 from supabase import AsyncClient
@@ -20,6 +20,7 @@ from supabase import AsyncClient
 from ..auth import CurrentUser, current_user
 from ..db import NotFoundError
 from ..llm.openrouter import OpenRouterClient
+from ..models import RoomStatus
 from ..orchestrator import run_room
 from ..repository import messages as messages_repo
 from ..repository import rooms as rooms_repo
@@ -73,6 +74,15 @@ async def start_run(
     room = await rooms_repo.get_room_with_agents(db, room_id)
     if room is None:
         raise NotFoundError(room_id)
+
+    # Refused here rather than in the stream: a paused room is a state the
+    # caller can see and change, so it should fail before the response starts
+    # instead of arriving as an error event after being told the run began.
+    if room.room.status is RoomStatus.PAUSED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This room is paused. Set it to active to start a run.",
+        )
 
     transcript = await messages_repo.list_messages(db, room_id)
 
