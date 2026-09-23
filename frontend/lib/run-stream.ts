@@ -18,19 +18,49 @@ import type { Message } from './agenlate'
 
 // -- what the server sends --------------------------------------------------
 
+/**
+ * What the Supervisor may decide. A closed set on the server, so a closed set
+ * here: `await_user` means it is blocked and has handed control back, which
+ * the interface has to treat differently from finishing.
+ */
+export type SupervisorAction = 'dispatch' | 'complete' | 'await_user'
+
+export type ObjectiveStatus = 'in_progress' | 'achieved' | 'blocked'
+
 /** The Supervisor chose what happens next, and why. */
 export type SupervisorDecisionEvent = {
   type: 'supervisor_decision'
   reasoning: string
-  action: 'dispatch' | 'complete' | 'ask_user'
-  objective_status: string
+  action: SupervisorAction
+  objective_status: ObjectiveStatus
   agent_id: string | null
   instruction: string | null
+  /** Present when the run ends — what to show the user. */
   message_to_user: string | null
   /** How many attempts the decision took to come back well-formed. */
   attempts: number
   message: Message
 }
+
+/**
+ * How a run ended. Mirrors `TerminationReason` in
+ * `backend/src/agenlate/supervisor/limits.py`.
+ */
+export type TerminationReason =
+  | 'completed'
+  | 'completed_empty'
+  | 'awaiting_user'
+  | 'max_turns'
+  | 'spend_cap'
+  | 'stalled'
+  | 'no_progress'
+  | 'unpriced_ceiling'
+  | 'provider_failure'
+  | 'key_rejected'
+  | 'out_of_credit'
+  | 'rate_limited'
+  | 'supervisor_failure'
+  | 'cancelled'
 
 /** An agent has been handed the turn and is working. */
 export type AgentStartedEvent = {
@@ -66,7 +96,7 @@ export type UsageEvent = {
 
 export type RunFinishedEvent = {
   type: 'run_finished'
-  reason: string
+  reason: TerminationReason
   /** The reason in a sentence a user can read. */
   explanation: string
   succeeded: boolean
