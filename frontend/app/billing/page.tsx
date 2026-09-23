@@ -1,131 +1,311 @@
 'use client'
 
-import { useState } from 'react'
-import { TopNavbar } from '@/components/top-navbar'
-import { LobbySidebar } from '@/components/lobby-sidebar'
+/**
+ * What the user has spent.
+ *
+ * Not a wallet. Under BYOK there is no Agenlate balance to show and nothing to
+ * top up — the user's credit sits at OpenRouter and is spent from there
+ * directly. So this screen reports rather than transacts, and the one action
+ * it offers is a link to where the credit actually lives.
+ *
+ * It also does not lead with token volume. Measured on the same room, a run
+ * cost $0.000179 with web search off and $0.007285 with it on: a factor of
+ * forty, almost none of it tokens. Two users with identical token counts can
+ * differ by that much, so the split that matters is how much came from calls
+ * that could reach the web, and that is reported on its own.
+ */
+
+import { useCallback, useEffect, useState } from 'react'
+import { CreditCard, ExternalLink, Wallet } from 'lucide-react'
+
+import { RequireAuth } from '@/components/auth-provider'
 import { ConsumptionChart } from '@/components/consumption-chart'
-import { Wallet, CreditCard, CalendarDays, ChevronDown } from 'lucide-react'
+import { LobbySidebar } from '@/components/lobby-sidebar'
+import { TopNavbar } from '@/components/top-navbar'
+import type { DailyUsage, UsageEvent, UsageSummary } from '@/lib/agenlate'
+import { usage as usageApi } from '@/lib/agenlate'
+import { ApiError } from '@/lib/api'
+import { formatUsd, timeAgo } from '@/lib/format'
 
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
-const DAY_NM = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
-const Y = 2026
-const M = 6
-
-function dim(y: number, m: number): number { return new Date(y, m + 1, 0).getDate() }
-function fdm(y: number, m: number): number { return new Date(y, m, 1).getDay() }
+const WINDOWS = [
+  { days: 7, label: '7 days' },
+  { days: 30, label: '30 days' },
+  { days: 90, label: '90 days' },
+] as const
 
 export default function BillingPage() {
-  const [fromOpen, setFromOpen] = useState(false)
-  const [toOpen, setToOpen] = useState(false)
-  const [startDay, setStartDay] = useState(20)
-  const [endDay, setEndDay] = useState(18)
-  const totalDays = dim(Y, M)
-  const firstDay = fdm(Y, M)
+  return (
+    <RequireAuth>
+      <Billing />
+    </RequireAuth>
+  )
+}
 
-  function hdl(day: number, mode: 'from' | 'to') {
-    if (mode === 'from') { setStartDay(day); setFromOpen(false) }
-    else { setEndDay(day); setToOpen(false) }
-  }
+function Billing() {
+  const [days, setDays] = useState<number>(30)
+  const [summary, setSummary] = useState<UsageSummary | null>(null)
+  const [series, setSeries] = useState<DailyUsage[]>([])
+  const [events, setEvents] = useState<UsageEvent[]>([])
+  const [error, setError] = useState<string | null>(null)
 
-  function btnCls(day: number, mode: 'from' | 'to'): string {
-    const activeDay = mode === 'from' ? startDay : endDay
-    if (day === activeDay && activeDay !== 0) return 'flex items-center justify-center rounded-md py-1.5 text-[11.5px] bg-[#FFF41F] font-semibold text-[#111111]'
-    return 'flex items-center justify-center rounded-md py-1.5 text-[11.5px] text-[#52525B] hover:bg-[#EBEBEB] dark:text-[#7d7d82] dark:hover:bg-[#1a1a1a]'
-  }
+  const load = useCallback(async (window: number) => {
+    setError(null)
+    try {
+      const [totals, daily, log] = await Promise.all([
+        usageApi.summary(window),
+        usageApi.daily(window),
+        usageApi.events(window),
+      ])
+      setSummary(totals)
+      setSeries(daily)
+      setEvents(log)
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError ? cause.message : 'Could not load your usage.',
+      )
+    }
+  }, [])
+
+  useEffect(() => {
+    void load(days)
+  }, [days, load])
 
   return (
     <div className="flex h-screen max-h-screen w-full flex-col overflow-hidden bg-[#0a0a0a] text-foreground">
-      <TopNavbar /><div className="flex min-h-0 flex-1 pt-[56px]">
-        <div className="hidden md:flex"><LobbySidebar /></div>
+      <TopNavbar />
+
+      <div className="flex min-h-0 flex-1 pt-[56px]">
+        <div className="hidden md:flex">
+          <LobbySidebar />
+        </div>
+
         <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto pl-16 pr-6 pt-12 pb-6">
           <div className="w-full max-w-3xl">
             <div className="mb-10">
               <h1 className="flex items-center gap-2.5 text-[20px] font-semibold tracking-tight text-[#111111] dark:text-white">
-                <CreditCard className="size-5 text-[#7A6F00] dark:text-[#FFF41F]" strokeWidth={1.5} />Billing</h1>
-              <p className="mt-1.5 text-[13px] font-light leading-relaxed text-[#52525B] dark:text-[#7d7d82]">Monitor your active multi-agent cloud expenditure, aggregate credit consumption, and daily compute analytics in real-time.</p>
-            </div>
-<div className="mb-6 rounded-xl bg-[#141414] px-5 pb-6 pt-5 transition-all dark:bg-[#141414]">
-              <div className="mb-3 flex items-center gap-2">
-                <Wallet className="size-4 text-[#7d7d82]" strokeWidth={1.5} />
-                <h3 className="text-[12px] font-semibold uppercase tracking-wide text-[#7d7d82]">Fund Balance</h3></div>
-              <div className="flex items-baseline gap-3">
-                <span className="text-[36px] font-semibold tracking-tight text-[#111111] dark:text-white">$48.20</span>
-                <span className="text-[15px] font-light text-[#a1a1aa]">USD</span>
-                <button type="button" className="ml-4 inline-flex items-center gap-2 rounded-md bg-[#FFF41F] px-4 py-2 text-[13px] font-semibold text-[#111111] transition-all hover:brightness-95 dark:text-[#0A0A0A]">Top Up Credits</button></div></div>
-
-            <div className="mb-4 flex items-center gap-3 px-1">
-              <button type="button" onClick={() => { setToOpen(false); setFromOpen(!fromOpen); }} className="inline-flex items-center gap-2 rounded-md border border-[#16161a] bg-[#141414] px-3 py-2 text-[12px] font-light text-[#7d7d82] transition-colors hover:border-[#7A6F00]/40 dark:border-[#16161a] dark:bg-[#141414] dark:text-[#7d7d82] dark:hover:border-[#FFF41F]/50">
-                <CalendarDays className="size-3.5 text-[#7A6F00] dark:text-[#FFF41F]" strokeWidth={1.5} />
-                <span className="text-[11px] font-medium text-[#7d7d82]">From: {MONTHS[M]} {startDay}, {Y}</span>
-                <ChevronDown className={'size-3 text-[#71717A] transition-transform ' + (fromOpen ? 'rotate-180' : '')} strokeWidth={1.5} /></button>
-              <button type="button" onClick={() => { setFromOpen(false); setToOpen(!toOpen); }} className="inline-flex items-center gap-2 rounded-md border border-[#16161a] bg-[#141414] px-3 py-2 text-[12px] font-light text-[#7d7d82] transition-colors hover:border-[#7A6F00]/40 dark:border-[#16161a] dark:bg-[#141414] dark:text-[#7d7d82] dark:hover:border-[#FFF41F]/50">
-                <CalendarDays className="size-3.5 text-[#7A6F00] dark:text-[#FFF41F]" strokeWidth={1.5} />
-                <span className="text-[11px] font-medium text-[#7d7d82]">To: {MONTHS[M]} {endDay || startDay}, {Y}</span>
-                <ChevronDown className={'size-3 text-[#71717A] transition-transform ' + (toOpen ? 'rotate-180' : '')} strokeWidth={1.5} /></button>
-              <div className="ml-2 flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-[#7d7d82]">Spent</span>
-                <span className="font-mono text-[14px] font-semibold tabular-nums text-[#111111] dark:text-white">$8.50</span>
-                <span className="text-[9px] text-[#a1a1aa]">USD</span></div></div>
-
-            {fromOpen && (
-              <div className="relative mb-4 px-1"><div className="absolute left-4 -top-2 z-50 w-72 rounded-lg border border-[#16161a] bg-[#141414] p-3 dark:border-[#16161a] dark:bg-[#141414]">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[13px] font-semibold text-[#111111] dark:text-white">{MONTHS[M]} {Y}</span></div>
-                  <div className="mb-1 grid grid-cols-7 gap-0.5">
-                    {DAY_NM.map((d) => <div key={d} className="py-1 text-center text-[9px] font-medium uppercase tracking-wider text-[#52525B] dark:text-[#7d7d82]">{d}</div>)}</div>
-                  <div className="grid grid-cols-7 gap-0.5">
-                    {Array.from({ length: firstDay }).map((_, i) => <div key={i} className="invisible" />)}
-                    {Array.from({ length: totalDays }, (_, i) => i + 1).map((day) => (
-                      <button key={day} type="button" onClick={() => hdl(day, 'from')} className={btnCls(day, 'from')}>{day}</button>))}</div></div></div>)}
-            {toOpen && (
-              <div className="relative mb-4 px-1"><div className="absolute left-4 -top-2 z-50 w-72 rounded-lg border border-[#16161a] bg-[#141414] p-3 dark:border-[#16161a] dark:bg-[#141414]">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-[13px] font-semibold text-[#111111] dark:text-white">{MONTHS[M]} {Y}</span></div>
-                  <div className="mb-1 grid grid-cols-7 gap-0.5">
-                    {DAY_NM.map((d) => <div key={d} className="py-1 text-center text-[9px] font-medium uppercase tracking-wider text-[#52525B] dark:text-[#7d7d82]">{d}</div>)}</div>
-                  <div className="grid grid-cols-7 gap-0.5">
-                    {Array.from({ length: firstDay }).map((_, i) => <div key={i} className="invisible" />)}
-                    {Array.from({ length: totalDays }, (_, i) => i + 1).map((day) => (
-                      <button key={day} type="button" onClick={() => hdl(day, 'to')} className={btnCls(day, 'to')}>{day}</button>))}</div></div></div>)}
-<div className="mb-6">
-              <ConsumptionChart />
+                <CreditCard
+                  className="size-5 text-[#7A6F00] dark:text-[#FFF41F]"
+                  strokeWidth={1.5}
+                />
+                Billing
+              </h1>
+              <p className="mt-1.5 max-w-2xl text-[13px] font-light leading-relaxed text-[#52525B] dark:text-[#7d7d82]">
+                What your agents have spent on your own OpenRouter key. Agenlate
+                does not hold a balance for you and takes no cut — your credit
+                lives at OpenRouter and is spent from there directly.
+              </p>
             </div>
 
-            <div className="mb-6 px-1">
-              <h3 className="mb-4 text-[12px] font-semibold uppercase tracking-wide text-[#52525B] dark:text-[#7d7d82]">Consumption Audit Log</h3>
-              <div className="max-h-[280px] overflow-y-auto overflow-x-auto scrollbar-thin rounded-lg border border-[#16161a]">
-                <table className="w-full text-left text-[12px]">
-                  <thead>
-                    <tr className="border-b border-[#16161a] text-[10px] font-medium uppercase tracking-wider text-[#52525B] dark:text-[#7d7d82]">
-                      <th className="sticky top-0 bg-white px-1 pb-2.5 pt-2.5 font-medium dark:bg-[#0A0A0A]">USD Spent</th>
-                      <th className="sticky top-0 bg-white px-1 pb-2.5 pt-2.5 font-medium dark:bg-[#0A0A0A]">Workspace</th>
-                      <th className="sticky top-0 bg-white px-1 pb-2.5 pt-2.5 font-medium dark:bg-[#0A0A0A]">Agent Name</th>
-                      <th className="sticky top-0 bg-white px-1 pb-2.5 pt-2.5 font-medium dark:bg-[#0A0A0A]">Time</th>
-                      <th className="sticky top-0 bg-white px-1 pb-2.5 pt-2.5 font-medium dark:bg-[#0A0A0A]">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { usd: '$0.421', room: 'Production Deploy', agent: 'Orquestador', time: '14:32:05', date: '2026-06-25' },
-                      { usd: '$1.204', room: 'Production Deploy', agent: 'Code Auditor', time: '14:33:12', date: '2026-06-25' },
-                      { usd: '$0.087', room: 'Production Deploy', agent: 'Infra Engineer', time: '14:34:48', date: '2026-06-25' },
-                      { usd: '$0.613', room: 'Smart Contract', agent: 'Security Analyst', time: '09:15:22', date: '2026-06-23' },
-                    ].map((row, i) => (
-                      <tr key={i} className="border-b border-[#16161a] transition-colors hover:bg-black/5 dark:border-[#16161a] dark:hover:bg-white/5">
-                        <td className="px-1 py-3 font-mono text-[13px] font-semibold tabular-nums text-[#111111] dark:text-white">{row.usd}</td>
-                        <td className="px-1 py-3 text-[#111111] dark:text-white">{row.room}</td>
-                        <td className="px-1 py-3 text-[#111111] dark:text-white">{row.agent}</td>
-                        <td className="px-1 py-3 font-mono text-[11px] text-[#52525B] dark:text-[#7d7d82]">{row.time}</td>
-                        <td className="px-1 py-3 font-mono text-[11px] text-[#52525B] dark:text-[#7d7d82]">{row.date}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {error && (
+              <div
+                role="alert"
+                className="mb-6 flex items-center justify-between gap-4 rounded-lg border border-red-500/20 bg-red-950/20 px-4 py-3"
+              >
+                <p className="text-[13px] font-light text-[#FCA5A5]">{error}</p>
+                <button
+                  type="button"
+                  onClick={() => void load(days)}
+                  className="shrink-0 text-[12px] font-medium text-[#FFF41F] transition-opacity hover:opacity-80"
+                >
+                  Try again
+                </button>
               </div>
+            )}
+
+            <SpentPanel summary={summary} days={days} />
+
+            <div className="mb-4 flex items-center gap-2 px-1">
+              {WINDOWS.map((window) => (
+                <button
+                  key={window.days}
+                  type="button"
+                  onClick={() => setDays(window.days)}
+                  aria-pressed={days === window.days}
+                  className={`rounded-md border px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                    days === window.days
+                      ? 'border-[#FFF41F]/40 bg-[#FFF41F]/10 text-[#FFF41F]'
+                      : 'border-[#16161a] bg-[#141414] text-[#7d7d82] hover:text-white'
+                  }`}
+                >
+                  Last {window.label}
+                </button>
+              ))}
             </div>
+
+            <div className="mb-6">
+              <ConsumptionChart series={series} />
+            </div>
+
+            <AuditLog events={events} />
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+function SpentPanel({
+  summary,
+  days,
+}: {
+  summary: UsageSummary | null
+  days: number
+}) {
+  const spent = summary?.cost_usd ?? 0
+  // A total is a floor rather than a total whenever the provider left calls
+  // unpriced. Showing it as exact would understate what the user spent.
+  const incomplete = summary ? !summary.cost_is_complete : false
+
+  return (
+    <div className="mb-6 rounded-xl bg-[#141414] px-5 pb-6 pt-5">
+      <div className="mb-3 flex items-center gap-2">
+        <Wallet className="size-4 text-[#7d7d82]" strokeWidth={1.5} />
+        <h3 className="text-[12px] font-semibold uppercase tracking-wide text-[#7d7d82]">
+          Spent in the last {days} days
+        </h3>
+      </div>
+
+      <div className="flex flex-wrap items-baseline gap-3">
+        <span className="text-[36px] font-semibold tracking-tight text-white">
+          {incomplete && <span className="text-[24px] text-[#7d7d82]">at least </span>}
+          {formatUsd(spent)}
+        </span>
+        <span className="text-[15px] font-light text-[#a1a1aa]">USD</span>
+        <a
+          href="https://openrouter.ai/credits"
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-[#FFF41F] px-4 py-2 text-[13px] font-semibold text-[#0A0A0A] transition-all hover:brightness-95"
+        >
+          Add credit at OpenRouter
+          <ExternalLink className="size-3.5" strokeWidth={2} />
+        </a>
+      </div>
+
+      {summary && (
+        <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[#1f1f23] pt-4 sm:grid-cols-3">
+          <Stat label="Rooms active" value={summary.rooms.toLocaleString()} />
+          <Stat label="Requests" value={summary.requests.toLocaleString()} />
+          <Stat
+            label="Of that, web-enabled"
+            value={formatUsd(summary.tool_enabled_cost_usd)}
+            note={`${summary.tool_enabled_requests} request${
+              summary.tool_enabled_requests === 1 ? '' : 's'
+            } that could reach the web`}
+          />
+        </div>
+      )}
+
+      {incomplete && summary && (
+        <p className="mt-4 text-[11.5px] font-light leading-relaxed text-[#7d7d82]">
+          {summary.unpriced_requests} request
+          {summary.unpriced_requests === 1 ? ' was' : 's were'} not priced by the
+          provider, so the real figure is higher than the one above. OpenRouter
+          is the authority on what you were actually charged.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function Stat({
+  label,
+  value,
+  note,
+}: {
+  label: string
+  value: string
+  note?: string
+}) {
+  return (
+    <div className="flex flex-col leading-tight">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-[#7d7d82]">
+        {label}
+      </span>
+      <span className="mt-1 font-mono text-[15px] font-semibold tabular-nums text-white">
+        {value}
+      </span>
+      {note && (
+        <span className="mt-0.5 text-[10.5px] font-light leading-snug text-[#7d7d82]">
+          {note}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function AuditLog({ events }: { events: UsageEvent[] }) {
+  return (
+    <div className="mb-6 px-1">
+      <h3 className="mb-4 text-[12px] font-semibold uppercase tracking-wide text-[#7d7d82]">
+        Consumption Audit Log
+      </h3>
+
+      {events.length === 0 ? (
+        <p className="text-[12.5px] font-light leading-relaxed text-[#7d7d82]">
+          Nothing to show for this window. Every provider call your agents make
+          is listed here as it happens.
+        </p>
+      ) : (
+        <div className="scrollbar-thin max-h-[280px] overflow-y-auto overflow-x-auto rounded-lg border border-[#16161a]">
+          <table className="w-full text-left text-[12px]">
+            <thead>
+              <tr className="border-b border-[#16161a] text-[10px] font-medium uppercase tracking-wider text-[#7d7d82]">
+                <Th>USD Spent</Th>
+                <Th>Workspace</Th>
+                <Th>Spoken by</Th>
+                <Th>Model</Th>
+                <Th>When</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.map((event) => (
+                <tr
+                  key={event.id}
+                  className="border-b border-[#16161a] transition-colors hover:bg-white/5"
+                >
+                  <td className="px-2 py-3 font-mono text-[13px] font-semibold tabular-nums text-white">
+                    {event.cost_usd === null || event.cost_usd === undefined ? (
+                      <span
+                        className="text-[#7d7d82]"
+                        title="The provider did not price this call."
+                      >
+                        not priced
+                      </span>
+                    ) : (
+                      formatUsd(event.cost_usd)
+                    )}
+                  </td>
+                  <td className="px-2 py-3 text-white">
+                    {/* Null once the room is deleted; the spending still
+                        happened, so the row stays. */}
+                    {event.room_name ?? (
+                      <span className="text-[#7d7d82]">deleted room</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-3 text-white">
+                    {event.emitter_name ?? <span className="text-[#7d7d82]">—</span>}
+                  </td>
+                  <td className="px-2 py-3 font-mono text-[11px] text-[#7d7d82]">
+                    {event.model}
+                  </td>
+                  <td className="px-2 py-3 text-[11px] text-[#7d7d82]">
+                    {timeAgo(event.created_at)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return (
+    <th className="sticky top-0 bg-[#0A0A0A] px-2 pb-2.5 pt-2.5 font-medium">
+      {children}
+    </th>
   )
 }

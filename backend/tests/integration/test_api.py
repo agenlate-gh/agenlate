@@ -671,3 +671,119 @@ class TestUsageByRoom:
 
     async def test_it_requires_a_signed_in_caller(self, api) -> None:
         assert (await api.get("/api/usage/rooms")).status_code == 401
+
+
+class TestUsageDaily:
+    """The billing chart's series."""
+
+    async def test_quiet_days_are_present_as_zero(self, api, alice_ready) -> None:
+        """A chart that plots only the days with activity draws a straight line
+        through a fortnight of nothing, which reads as steady spending."""
+        days = (await api.get("/api/usage/daily?days=7", headers=auth(alice_ready))).json()
+
+        assert len(days) == 8  # seven days back, plus today
+        assert all(day["cost_usd"] == 0 for day in days)
+        assert [day["day"] for day in days] == sorted(day["day"] for day in days)
+
+    async def test_todays_spending_lands_on_today(
+        self, api, alice_db, alice_ready
+    ) -> None:
+        from datetime import datetime, timezone
+
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        await usage_repo.record_usage_event(
+            alice_db, UsageEventCreate(user_id=alice_ready.id, model="m", cost_usd=0.02)
+        )
+
+        days = (await api.get("/api/usage/daily?days=7", headers=auth(alice_ready))).json()
+        today = datetime.now(timezone.utc).date().isoformat()
+
+        entry = next(day for day in days if day["day"] == today)
+        assert entry["cost_usd"] == pytest.approx(0.02)
+        assert entry["requests"] == 1
+
+    async def test_it_requires_a_signed_in_caller(self, api) -> None:
+        assert (await api.get("/api/usage/daily")).status_code == 401
+
+
+class TestUsageEvents:
+    """The audit log."""
+
+    async def test_events_come_back_newest_first_with_their_room(
+        self, api, alice_db, alice_ready
+    ) -> None:
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        room = (await api.post("/api/rooms", json=ROOM, headers=auth(alice_ready))).json()
+        for cost in (0.01, 0.02):
+            await usage_repo.record_usage_event(
+                alice_db,
+                UsageEventCreate(
+                    user_id=alice_ready.id,
+                    room_id=room["id"],
+                    model="qwen/qwen3.7-flash",
+                    cost_usd=cost,
+                ),
+            )
+
+        events = (await api.get("/api/usage/events", headers=auth(alice_ready))).json()
+
+        assert len(events) == 2
+        assert events[0]["created_at"] >= events[1]["created_at"]
+        assert events[0]["room_name"] == room["name"]
+        assert events[0]["model"] == "qwen/qwen3.7-flash"
+
+    async def test_spending_outlives_the_room_it_came_from(
+        self, api, alice_db, alice_ready
+    ) -> None:
+        """Deleting a room must not erase the record of money already spent."""
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        room = (await api.post("/api/rooms", json=ROOM, headers=auth(alice_ready))).json()
+        await usage_repo.record_usage_event(
+            alice_db,
+            UsageEventCreate(
+                user_id=alice_ready.id, room_id=room["id"], model="m", cost_usd=0.01
+            ),
+        )
+        await api.delete(f"/api/rooms/{room['id']}", headers=auth(alice_ready))
+
+        events = (await api.get("/api/usage/events", headers=auth(alice_ready))).json()
+
+        assert len(events) == 1
+        assert events[0]["room_id"] is None
+        assert events[0]["room_name"] is None
+        assert events[0]["cost_usd"] == pytest.approx(0.01)
+
+    async def test_an_unpriced_call_reports_no_cost_rather_than_zero(
+        self, api, alice_db, alice_ready
+    ) -> None:
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        await usage_repo.record_usage_event(
+            alice_db, UsageEventCreate(user_id=alice_ready.id, model="m", cost_usd=None)
+        )
+
+        events = (await api.get("/api/usage/events", headers=auth(alice_ready))).json()
+
+        assert events[0]["cost_usd"] is None
+
+    async def test_one_user_cannot_see_anothers_events(
+        self, api, alice_db, alice_ready, bob_ready
+    ) -> None:
+        from agenlate.models import UsageEventCreate
+        from agenlate.repository import usage as usage_repo
+
+        await usage_repo.record_usage_event(
+            alice_db, UsageEventCreate(user_id=alice_ready.id, model="m", cost_usd=9.0)
+        )
+
+        assert (await api.get("/api/usage/events", headers=auth(bob_ready))).json() == []
+
+    async def test_it_requires_a_signed_in_caller(self, api) -> None:
+        assert (await api.get("/api/usage/events")).status_code == 401

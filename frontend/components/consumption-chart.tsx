@@ -1,64 +1,90 @@
-﻿'use client'
+'use client'
+
+/**
+ * Spending per day.
+ *
+ * The series arrives with quiet days already filled in as zero, so the shape
+ * is honest: a fortnight of nothing looks like a fortnight of nothing rather
+ * than a straight line drawn between the two days either side of it.
+ */
 
 import {
-  AreaChart,
   Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
 } from 'recharts'
 
-const chartData = [
-  { label: 'Mon', value: 1.2 },
-  { label: 'Tue', value: 2.1 },
-  { label: 'Wed', value: 1.8 },
-  { label: 'Thu', value: 2.4 },
-  { label: 'Fri', value: 0.9 },
-  { label: 'Sat', value: 0.1 },
-  { label: 'Sun', value: 0.0 },
-]
+import type { DailyUsage } from '@/lib/agenlate'
+import { formatUsd } from '@/lib/format'
 
-export function ConsumptionChart() {
-  const total = chartData.reduce((sum, d) => sum + d.value, 0)
+export function ConsumptionChart({ series }: { series: DailyUsage[] }) {
+  const data = series.map((point) => ({
+    label: new Date(point.day).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    }),
+    value: point.cost_usd,
+    requests: point.requests,
+  }))
 
-  const gridStroke = '#E4E4E7'
-  const textFill = '#52525B'
-  const axisStroke = '#E4E4E7'
+  const spentAnything = data.some((point) => point.value > 0)
 
   return (
-    <div className="rounded-lg border border-[#E4E4E7] bg-white p-3 dark:border-[#262629] dark:bg-[#0A0A0A]">
+    <div className="rounded-lg border border-[#262629] bg-[#0A0A0A] p-3">
+      {!spentAnything && (
+        <p className="px-2 pb-2 pt-1 text-[11.5px] font-light text-[#7d7d82]">
+          Nothing spent in this window yet.
+        </p>
+      )}
       <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -24, bottom: -4 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: -4 }}>
           <defs>
             <linearGradient id="yellowGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#FFF41F" stopOpacity={0.45} />
               <stop offset="100%" stopColor="#FFF41F" stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#1f1f23" />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 10, fill: textFill }}
-            axisLine={{ stroke: axisStroke }}
+            tick={{ fontSize: 10, fill: '#7d7d82' }}
+            axisLine={{ stroke: '#262629' }}
             tickLine={false}
+            // A month of daily labels overlaps into illegibility; showing
+            // every few keeps the axis readable at any window length.
+            interval="preserveStartEnd"
+            minTickGap={24}
           />
           <YAxis
-            tick={{ fontSize: 10, fill: textFill }}
+            tick={{ fontSize: 10, fill: '#7d7d82' }}
             axisLine={false}
             tickLine={false}
+            tickFormatter={(value) => formatUsd(Number(value ?? 0))}
+            width={56}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #E4E4E7',
+              backgroundColor: '#141414',
+              border: '1px solid #262629',
               borderRadius: '8px',
               fontSize: '12px',
-              color: '#111111',
+              color: '#ffffff',
             }}
-            itemStyle={{ color: '#7A6F00' }}
-            labelStyle={{ fontWeight: 600, color: '#111111' }}
+            itemStyle={{ color: '#FFF41F' }}
+            labelStyle={{ fontWeight: 600, color: '#ffffff' }}
+            formatter={(value, _name, entry) => {
+              const requests = Number(entry?.payload?.requests ?? 0)
+              return [
+                `${formatUsd(Number(value ?? 0))} · ${requests} request${
+                  requests === 1 ? '' : 's'
+                }`,
+                'Spent',
+              ]
+            }}
           />
           <Area
             type="monotone"
@@ -66,7 +92,7 @@ export function ConsumptionChart() {
             stroke="#FFF41F"
             strokeWidth={2}
             fill="url(#yellowGradient)"
-            dot={{ r: 3, fill: '#FFF41F', stroke: '#FFF41F', strokeWidth: 1 }}
+            dot={false}
             activeDot={{ r: 5, fill: '#FFF41F', stroke: '#111111', strokeWidth: 2 }}
           />
         </AreaChart>

@@ -30,6 +30,8 @@ export type MessagePage = Schemas['MessagePage']
 export type Emitter = Schemas['Emitter']
 export type KeyCheck = Schemas['KeyCheckResponse']
 export type UsageSummary = Schemas['UsageSummary']
+export type DailyUsage = Schemas['DailyUsage']
+export type UsageEvent = Schemas['UsageEventOut']
 export type BuilderResponse = Schemas['BuilderResponse']
 export type BuilderMessage = Schemas['BuilderMessage']
 
@@ -116,4 +118,11 @@ export const usage = {
    * caller reads a missing room as nothing spent.
    */
   byRoom: (days = 30) => api.get<RoomUsage[]>(`/api/usage/rooms?days=${days}`),
+
+  /** One point per day, oldest first, with quiet days included as zero. */
+  daily: (days = 30) => api.get<DailyUsage[]>(`/api/usage/daily?days=${days}`),
+
+  /** Individual provider calls, newest first — the audit log. */
+  events: (days = 30, limit = 100) =>
+    api.get<UsageEvent[]>(`/api/usage/events?days=${days}&limit=${limit}`),
 }

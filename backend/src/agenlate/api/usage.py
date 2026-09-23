@@ -13,7 +13,7 @@ inferred.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -54,6 +54,64 @@ class UsageSummary(BaseModel):
             "comes from."
         )
     )
+
+
+class DailyUsage(BaseModel):
+    """One day's spending, for the chart on the billing screen."""
+
+    day: date
+    requests: int
+    cost_usd: float
+
+
+@router.get("/daily", response_model=list[DailyUsage])
+async def usage_daily(
+    days: int = Query(default=30, ge=1, le=365),
+    user: CurrentUser = Depends(current_user),
+    db: AsyncClient = Depends(user_db),
+) -> list[DailyUsage]:
+    """Spending per day, oldest first, with quiet days included as zero.
+
+    The zeroes matter. A chart that plots only the days with activity draws a
+    continuous line through a fortnight of nothing, which reads as steady
+    spending rather than as a gap.
+
+    Days are UTC, matching how ``created_at`` is stored. A user in another
+    timezone sees a boundary that is not their midnight; correcting that needs
+    their offset, which is worth asking for only once anyone is reconciling
+    these numbers against an invoice.
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    rows = await execute(
+        db.table("usage_events")
+        .select("created_at,cost_usd,is_priced")
+        .eq("user_id", user.id)
+        .gte("created_at", since.isoformat()),
+        context="usage_daily",
+    )
+
+    totals: dict[date, tuple[int, float]] = {}
+    for row in rows:
+        if not row.get("created_at"):
+            continue
+        day = datetime.fromisoformat(row["created_at"]).astimezone(timezone.utc).date()
+        requests, cost = totals.get(day, (0, 0.0))
+        priced = row.get("is_priced") and row.get("cost_usd") is not None
+        totals[day] = (requests + 1, cost + (float(row["cost_usd"]) if priced else 0.0))
+
+    start = since.date()
+    today = datetime.now(timezone.utc).date()
+    span = (today - start).days
+
+    return [
+        DailyUsage(
+            day=start + timedelta(days=offset),
+            requests=totals.get(start + timedelta(days=offset), (0, 0.0))[0],
+            cost_usd=round(totals.get(start + timedelta(days=offset), (0, 0.0))[1], 6),
+        )
+        for offset in range(span + 1)
+    ]
 
 
 class RoomUsage(BaseModel):
@@ -123,6 +181,72 @@ async def usage_by_room(
     ]
     summaries.sort(key=lambda s: s.cost_usd, reverse=True)
     return summaries
+
+
+class UsageEventOut(BaseModel):
+    """One provider call, as the audit log shows it."""
+
+    id: str
+    created_at: datetime
+    model: str
+    room_id: str | None
+    room_name: str | None = Field(
+        default=None,
+        description="Null when the room has since been deleted; the spending still happened.",
+    )
+    emitter_name: str | None = Field(
+        default=None, description="Who was speaking when this was spent."
+    )
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: float | None = Field(
+        default=None, description="Null when the provider did not price the call."
+    )
+
+
+@router.get("/events", response_model=list[UsageEventOut])
+async def usage_events(
+    days: int = Query(default=30, ge=1, le=365),
+    limit: int = Query(default=100, ge=1, le=500),
+    user: CurrentUser = Depends(current_user),
+    db: AsyncClient = Depends(user_db),
+) -> list[UsageEventOut]:
+    """This caller's most recent provider calls, newest first.
+
+    The room name and the speaker are embedded rather than resolved by the
+    client, which would otherwise issue a request per row. Both can be null:
+    usage deliberately outlives the room and the message it came from, because
+    deleting a room must not erase the record of money already spent.
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+
+    rows = await execute(
+        db.table("usage_events")
+        .select(
+            "id,created_at,model,room_id,prompt_tokens,completion_tokens,cost_usd,"
+            "rooms(name),messages(emitter_name)"
+        )
+        .eq("user_id", user.id)
+        .gte("created_at", since.isoformat())
+        .order("created_at", desc=True)
+        .limit(limit),
+        context="usage_events",
+    )
+
+    return [
+        UsageEventOut(
+            id=row["id"],
+            created_at=row["created_at"],
+            model=row["model"],
+            room_id=row.get("room_id"),
+            room_name=(row.get("rooms") or {}).get("name"),
+            emitter_name=(row.get("messages") or {}).get("emitter_name"),
+            prompt_tokens=int(row.get("prompt_tokens") or 0),
+            completion_tokens=int(row.get("completion_tokens") or 0),
+            cost_usd=float(row["cost_usd"]) if row.get("cost_usd") is not None else None,
+        )
+        for row in rows
+    ]
 
 
 @router.get("/summary", response_model=UsageSummary)

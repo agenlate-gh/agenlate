@@ -1,46 +1,94 @@
 'use client'
 
-import { TopNavbar } from '@/components/top-navbar'
-import { LobbySidebar } from '@/components/lobby-sidebar'
-import { CircleOff, Eye, EyeOff, Key, Plus } from 'lucide-react'
-import { useState } from 'react'
-
 /**
- * Official OpenRouter API key prefix.
- * Agenlate validates against this prefix strictly so that real-time web
- * scraping and the financial meter always resolve through the OpenRouter
- * network — keys from any other provider are rejected before being stored.
+ * Where the user gives Agenlate their OpenRouter key.
+ *
+ * One key, not a list. The key is what pays for runs, and there is exactly one
+ * account paying — offering to store several would be offering a choice with
+ * no meaning behind it, since nothing decides which one a run uses.
+ *
+ * The key is checked against OpenRouter before it is stored. That check is
+ * free: OpenRouter's key endpoint reports whether a key works without running
+ * any inference. Catching a bad key here turns what would otherwise be a
+ * failed run — after building agents, opening a room and pressing go — into a
+ * form error.
  */
-const OPENROUTER_KEY_PREFIX = 'sk-or-v1-'
 
-/** Educational message shown whenever the pasted key is not an OpenRouter key. */
-const BYOK_FORMAT_ERROR =
-  'Agenlate works only through the OpenRouter network, which is what makes web search and the spending meter work. Please enter a key beginning with sk-or-v1-'
+import { useEffect, useState } from 'react'
+import { CircleOff, Eye, EyeOff, Key, Loader2, Trash2 } from 'lucide-react'
+
+import { RequireAuth } from '@/components/auth-provider'
+import { LobbySidebar } from '@/components/lobby-sidebar'
+import { TopNavbar } from '@/components/top-navbar'
+import { keys as keysApi } from '@/lib/agenlate'
+import { ApiError } from '@/lib/api'
+import { clearKey, keyTail, looksLikeOpenRouterKey, readKey, saveKey } from '@/lib/byok'
+
+const FORMAT_ERROR =
+  'Agenlate runs through OpenRouter, which is what makes web search and the spending meter work. Enter a key beginning with sk-or-v1-'
 
 export default function ByokPage() {
-  const [apiKeys, setApiKeys] = useState<string[]>([])
-  const [currentKey, setCurrentKey] = useState('')
-  const [showKey, setShowKey] = useState(false)
+  return (
+    <RequireAuth>
+      <Byok />
+    </RequireAuth>
+  )
+}
 
-  const trimmedKey = currentKey.trim()
-  const hasInput = trimmedKey.length > 0
-  const isOpenRouterKey = trimmedKey.startsWith(OPENROUTER_KEY_PREFIX)
+function Byok() {
+  const [stored, setStored] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
+  const [visible, setVisible] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [confirmation, setConfirmation] = useState<string | null>(null)
 
-  /**
-   * Pedantic validation: any format that is not "sk-or-v1-..." — OpenAI's
-   * "sk-proj-...", other gateways or generic text — triggers the error state.
-   */
-  const showFormatError = hasInput && !isOpenRouterKey
+  // Reading storage on mount rather than during render: the server renders
+  // this page first and has no localStorage, so touching it any earlier is a
+  // hydration mismatch.
+  useEffect(() => setStored(readKey()), [])
 
-  function handleAddKey() {
-    if (!isOpenRouterKey) return
-    setApiKeys([...apiKeys, trimmedKey])
-    setCurrentKey('')
+  const trimmed = draft.trim()
+  const wellFormed = looksLikeOpenRouterKey(trimmed)
+  const showFormatError = trimmed.length > 0 && !wellFormed
+
+  async function save() {
+    if (!wellFormed || checking) return
+    setChecking(true)
+    setError(null)
+    setConfirmation(null)
+
+    try {
+      const result = await keysApi.validate(trimmed)
+      if (!result.valid) {
+        setError(result.message)
+        return
+      }
+
+      saveKey(trimmed)
+      setStored(trimmed)
+      setDraft('')
+      setVisible(false)
+      setConfirmation(
+        result.limit_remaining !== null && result.limit_remaining !== undefined
+          ? `${result.message} $${result.limit_remaining.toFixed(2)} of credit left on it.`
+          : result.message,
+      )
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError ? cause.message : 'Could not check this key.',
+      )
+    } finally {
+      setChecking(false)
+    }
   }
 
-  const fieldClass = showFormatError
-    ? 'border-[#DC2626] ring-1 ring-[#DC2626]/25 focus:border-[#DC2626] dark:border-[#EF4444] dark:ring-[#EF4444]/40 dark:focus:border-[#EF4444]'
-    : 'border-[#E4E4E7] focus:border-[#111111]/30 dark:border-[#262629] dark:focus:border-[#FFF41F]/50'
+  function remove() {
+    clearKey()
+    setStored(null)
+    setConfirmation(null)
+    setError(null)
+  }
 
   return (
     <div className="flex h-screen max-h-screen w-full flex-col overflow-hidden bg-[#0a0a0a] text-foreground">
@@ -53,153 +101,210 @@ export default function ByokPage() {
 
         <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto pl-16 pr-6 pt-12 pb-6">
           <div className="w-full max-w-3xl">
-            {/* Header */}
             <div className="mb-10">
               <h1 className="flex items-center gap-2.5 text-[20px] font-semibold tracking-tight text-[#111111] dark:text-white">
                 <Key className="size-5 text-[#7A6F00] dark:text-[#FFF41F]" strokeWidth={1.5} />
                 BYOK Console
               </h1>
-              <p className="mt-1.5 text-[13px] font-light leading-relaxed text-[#52525B] dark:text-[#7d7d82]">
-                Bring your own API Key from OpenRouter to unlock secure web scraping and direct LLM interconnectivity within your workspaces.
+              <p className="mt-1.5 max-w-2xl text-[13px] font-light leading-relaxed text-[#52525B] dark:text-[#7d7d82]">
+                Agenlate runs on your own OpenRouter key. Your agents spend your
+                credit directly, and we never take a cut of it or hold it on
+                your behalf.
               </p>
             </div>
 
-            {/* Add API Key — flat, no card */}
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[13px] font-semibold text-[#111111] dark:text-white">
-                OpenRouter API Key
-              </h3>
-              <span className="flex items-center gap-1.5 text-[11px] text-green-600 dark:text-green-500">
-                <span className="size-1.5 rounded-full bg-green-600 pulse-dot dark:bg-green-500" aria-hidden />
-                Live Network
-              </span>
-            </div>
+            {stored ? (
+              <ConnectedKey tail={keyTail(stored)} onRemove={remove} />
+            ) : (
+              <>
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-[13px] font-semibold text-[#111111] dark:text-white">
+                    OpenRouter API Key
+                  </h3>
+                </div>
 
-            <div className={`mb-3 flex items-center gap-3 rounded-lg border bg-[#141414] px-4 py-2.5 transition-all focus-within:border-[#FFF41F]/50 dark:bg-[#141414] dark:focus-within:border-[#FFF41F]/50 ${
-                  showFormatError
-                    ? 'border-[#DC2626] dark:border-[#EF4444]'
-                    : 'border-[#16161a] dark:border-[#16161a]'
-                }`}>
-              <input
-                type={showKey ? 'text' : 'password'}
-                value={currentKey}
-                onChange={(e) => setCurrentKey(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddKey()}
-                placeholder="sk-or-v1-..."
-                aria-label="OpenRouter API Key"
-                aria-invalid={showFormatError}
-                aria-describedby={showFormatError ? 'byok-key-error' : 'byok-key-hint'}
-                className={`flex-1 border-0 bg-transparent text-[14px] font-mono text-foreground outline-none placeholder:text-[#A1A1AA] ${
-                  showFormatError ? 'text-[#DC2626] dark:text-[#EF4444]' : ''
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowKey(!showKey)}
-                className="shrink-0 text-[#71717A] hover:text-[#111111] dark:text-[#7d7d82] dark:hover:text-white"
-                aria-label={showKey ? 'Hide key' : 'Show key'}
-              >
-                {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-              </button>
-            </div>
-
-              {showFormatError && (
                 <div
-                  id="byok-key-error"
-                  role="alert"
-                  className="mb-2 flex items-start gap-2"
+                  className={`mb-3 flex items-center gap-3 rounded-lg border bg-[#141414] px-4 py-2.5 transition-all focus-within:border-[#FFF41F]/50 ${
+                    showFormatError ? 'border-[#EF4444]' : 'border-[#16161a]'
+                  }`}
                 >
-                  <CircleOff className="mt-0.5 size-3.5 shrink-0 text-[#DC2626] dark:text-[#F87171]" />
-                  <p className="text-[11.5px] font-light leading-relaxed text-[#991B1B] dark:text-[#FCA5A5]">
-                    <span className="font-medium text-[#B91C1C] dark:text-[#F87171]">Error:</span>{' '}
-                    {BYOK_FORMAT_ERROR}
+                  <input
+                    type={visible ? 'text' : 'password'}
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => event.key === 'Enter' && void save()}
+                    placeholder="sk-or-v1-..."
+                    aria-label="OpenRouter API key"
+                    aria-invalid={showFormatError}
+                    aria-describedby={showFormatError ? 'byok-error' : 'byok-hint'}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="flex-1 border-0 bg-transparent font-mono text-[14px] text-foreground outline-none placeholder:text-[#52525B]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setVisible(!visible)}
+                    aria-label={visible ? 'Hide key' : 'Show key'}
+                    className="shrink-0 text-[#7d7d82] transition-colors hover:text-white"
+                  >
+                    {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+
+                {showFormatError && (
+                  <div id="byok-error" role="alert" className="mb-2 flex items-start gap-2">
+                    <CircleOff className="mt-0.5 size-3.5 shrink-0 text-[#F87171]" />
+                    <p className="text-[11.5px] font-light leading-relaxed text-[#FCA5A5]">
+                      {FORMAT_ERROR}
+                    </p>
+                  </div>
+                )}
+
+                {error && (
+                  <p role="alert" className="mb-2 text-[11.5px] font-light leading-relaxed text-[#FCA5A5]">
+                    {error}
                   </p>
-                </div>
-              )}
+                )}
 
-              {isOpenRouterKey && (
-                <p className="mb-2 flex items-center gap-1.5 text-[11.5px] font-light text-green-600 dark:text-green-500">
-                  <span className="size-1.5 rounded-full bg-green-600 dark:bg-green-500" aria-hidden />
-                  Valid OpenRouter format · prefix <span className="font-mono">sk-or-v1-</span>
-                </p>
-              )}
+                {!trimmed && (
+                  <p
+                    id="byok-hint"
+                    className="mb-2 text-[11px] font-light leading-relaxed text-[#7d7d82]"
+                  >
+                    Keys from other providers (for example{' '}
+                    <span className="font-mono">sk-proj-…</span>) will not work.
+                  </p>
+                )}
 
-              {!hasInput && (
-                <p
-                  id="byok-key-hint"
-                  className="mb-2 text-[11px] font-light leading-relaxed text-[#A1A1AA] dark:text-[#7d7d82]"
+                <button
+                  type="button"
+                  onClick={() => void save()}
+                  disabled={!wellFormed || checking}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[#FFF41F] px-3.5 py-2 text-[12px] font-semibold text-[#0A0A0A] transition-all hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Required format:{' '}
-                  <span className="font-mono font-semibold text-[#52525B] dark:text-[#7d7d82]">
-                    sk-or-v1-...
-                  </span>{' '}
-                  · Keys from other providers (for example{' '}
-                  <span className="font-mono">sk-proj-...</span>) are rejected.
-                </p>
-              )}
-
-              <button
-                type="button"
-                onClick={handleAddKey}
-                disabled={!isOpenRouterKey}
-                className="inline-flex items-center gap-1.5 rounded-md bg-[#FFF41F] px-3 py-1.5 text-[12px] font-semibold text-[#111111] transition-all hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50 dark:text-[#0A0A0A]"
-              >
-                <Plus className="size-3.5" strokeWidth={2.5} />
-                Add API Key
-              </button>
-
-            {/* Guide — flat, flows directly on background */}
-            <div className="mt-6">
-              <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-[#52525B] dark:text-[#7d7d82]">
-                Quick Guide
-              </h3>
-              <ul className="space-y-2 text-[12.5px] font-light leading-relaxed text-[#52525B] dark:text-[#7d7d82]">
-                <li className="flex items-start gap-2">
-                  <span className="mt-0.5 font-semibold text-[#7d7d82]">1.</span>
-                  <span>Visit <span className="font-medium text-[#111111] dark:text-white">openrouter.ai/keys</span> and sign in to your account.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-0.5 font-semibold text-[#7d7d82]">2.</span>
-                  <span>Generate a new API key. It must start with the official <span className="font-mono text-[#111111] dark:text-white">sk-or-v1-</span> prefix.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-0.5 font-semibold text-[#7d7d82]">3.</span>
-                  <span>Copy it and paste it into the field above. Never share your key with third parties.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-0.5 font-semibold text-[#7d7d82]">4.</span>
-                  <span>Click <span className="font-medium text-[#111111] dark:text-white">Add API Key</span> to activate it in your session.</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Stored keys — flat */}
-            {apiKeys.length > 0 && (
-              <div className="mt-4 pt-2">
-                <h3 className="mb-3 text-[12px] font-semibold uppercase tracking-wide text-[#52525B] dark:text-[#7d7d82]">
-                  Stored Keys ({apiKeys.length})
-                </h3>
-                <div className="space-y-2">
-                  {apiKeys.map((key, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between border-b border-[#16161a] pb-2"
-                    >
-                      <span className="font-mono text-[12px] text-[#52525B] dark:text-[#7d7d82]">
-                        {key.slice(0, 12)}...
-                      </span>
-                      <span className="flex items-center gap-1.5 text-[11px] text-green-600 dark:text-green-500">
-                        <span className="size-1.5 rounded-full bg-green-600 dark:bg-green-500" />
-                        Connected
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                  {checking && <Loader2 className="size-3.5 animate-spin" />}
+                  {checking ? 'Checking with OpenRouter…' : 'Check and save key'}
+                </button>
+              </>
             )}
+
+            {confirmation && (
+              <p className="mt-3 flex items-center gap-1.5 text-[11.5px] font-light text-green-500">
+                <span className="size-1.5 rounded-full bg-green-500" aria-hidden />
+                {confirmation}
+              </p>
+            )}
+
+            <WhereItLives />
+            <QuickGuide />
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ConnectedKey({ tail, onRemove }: { tail: string; onRemove: () => void }) {
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-[13px] font-semibold text-[#111111] dark:text-white">
+          OpenRouter API Key
+        </h3>
+        <span className="flex items-center gap-1.5 text-[11px] text-green-500">
+          <span className="size-1.5 rounded-full bg-green-500 pulse-dot" aria-hidden />
+          Connected
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-[#16161a] bg-[#141414] px-4 py-3">
+        <span className="font-mono text-[13px] text-[#d4d4d8]">
+          sk-or-v1-••••••••{tail}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium text-[#7d7d82] transition-colors hover:bg-red-950/30 hover:text-red-400"
+        >
+          <Trash2 className="size-3.5" strokeWidth={1.5} />
+          Remove
+        </button>
+      </div>
+
+      <p className="mt-2 text-[11.5px] font-light leading-relaxed text-[#7d7d82]">
+        Only the last four characters are shown. Removing it here stops runs
+        until you add one again; it does not revoke the key at OpenRouter.
+      </p>
+    </div>
+  )
+}
+
+/**
+ * The part users are entitled to know before pasting a credential.
+ *
+ * Stated plainly rather than buried: the key lives in this browser, which is
+ * both the reason a breach of Agenlate exposes nobody's credit and the reason
+ * it does not follow them to another machine.
+ */
+function WhereItLives() {
+  return (
+    <div className="mt-8 rounded-lg border border-[#16161a] bg-[#111111] px-4 py-3.5">
+      <h3 className="text-[12px] font-semibold uppercase tracking-wide text-[#d4d4d8]">
+        Where this key lives
+      </h3>
+      <ul className="mt-2 space-y-1.5 text-[12px] font-light leading-relaxed text-[#7d7d82]">
+        <li>
+          It is stored in this browser. We never write it to our database, and
+          a breach of Agenlate would not expose it.
+        </li>
+        <li>
+          It is sent with each run, used for that run, and dropped. Nothing
+          keeps a copy between runs.
+        </li>
+        <li>
+          Because it lives here, it does not follow you to another browser or
+          device, and clearing site data removes it.
+        </li>
+      </ul>
+    </div>
+  )
+}
+
+function QuickGuide() {
+  const steps = [
+    <>
+      Visit{' '}
+      <a
+        href="https://openrouter.ai/keys"
+        target="_blank"
+        rel="noreferrer"
+        className="font-medium text-[#FFF41F] transition-opacity hover:opacity-80"
+      >
+        openrouter.ai/keys
+      </a>{' '}
+      and sign in.
+    </>,
+    <>
+      Create a key. It starts with{' '}
+      <span className="font-mono text-white">sk-or-v1-</span>.
+    </>,
+    <>Add credit to your OpenRouter account — runs spend from it directly.</>,
+    <>Paste the key above. We check it with OpenRouter before saving it.</>,
+  ]
+
+  return (
+    <div className="mt-6">
+      <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-[#7d7d82]">
+        Quick Guide
+      </h3>
+      <ol className="space-y-2 text-[12.5px] font-light leading-relaxed text-[#7d7d82]">
+        {steps.map((step, index) => (
+          <li key={index} className="flex items-start gap-2">
+            <span className="mt-0.5 font-semibold text-[#7d7d82]">{index + 1}.</span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }

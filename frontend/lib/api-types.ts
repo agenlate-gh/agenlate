@@ -189,6 +189,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/usage/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usage Daily
+         * @description Spending per day, oldest first, with quiet days included as zero.
+         *
+         *     The zeroes matter. A chart that plots only the days with activity draws a
+         *     continuous line through a fortnight of nothing, which reads as steady
+         *     spending rather than as a gap.
+         *
+         *     Days are UTC, matching how ``created_at`` is stored. A user in another
+         *     timezone sees a boundary that is not their midnight; correcting that needs
+         *     their offset, which is worth asking for only once anyone is reconciling
+         *     these numbers against an invoice.
+         */
+        get: operations["usage_daily_api_usage_daily_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/usage/rooms": {
         parameters: {
             query?: never;
@@ -201,6 +230,31 @@ export interface paths {
          * @description Per-room spending over a window, most expensive first.
          */
         get: operations["usage_by_room_api_usage_rooms_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usage Events
+         * @description This caller's most recent provider calls, newest first.
+         *
+         *     The room name and the speaker are embedded rather than resolved by the
+         *     client, which would otherwise issue a request per row. Both can be null:
+         *     usage deliberately outlives the room and the message it came from, because
+         *     deleting a room must not erase the record of money already spent.
+         */
+        get: operations["usage_events_api_usage_events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -343,6 +397,21 @@ export interface components {
             needs_answer: boolean;
             /** Cost Usd */
             cost_usd?: number | null;
+        };
+        /**
+         * DailyUsage
+         * @description One day's spending, for the chart on the billing screen.
+         */
+        DailyUsage: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Requests */
+            requests: number;
+            /** Cost Usd */
+            cost_usd: number;
         };
         /**
          * Emitter
@@ -545,6 +614,42 @@ export interface components {
             max_turns?: number | null;
             /** Spend Cap Usd */
             spend_cap_usd?: number | null;
+        };
+        /**
+         * UsageEventOut
+         * @description One provider call, as the audit log shows it.
+         */
+        UsageEventOut: {
+            /** Id */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Model */
+            model: string;
+            /** Room Id */
+            room_id: string | null;
+            /**
+             * Room Name
+             * @description Null when the room has since been deleted; the spending still happened.
+             */
+            room_name?: string | null;
+            /**
+             * Emitter Name
+             * @description Who was speaking when this was spent.
+             */
+            emitter_name?: string | null;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /**
+             * Cost Usd
+             * @description Null when the provider did not price the call.
+             */
+            cost_usd?: number | null;
         };
         /**
          * UsageSummary
@@ -1090,6 +1195,37 @@ export interface operations {
             };
         };
     };
+    usage_daily_api_usage_daily_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyUsage"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     usage_by_room_api_usage_rooms_get: {
         parameters: {
             query?: {
@@ -1108,6 +1244,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoomUsage"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    usage_events_api_usage_events_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageEventOut"][];
                 };
             };
             /** @description Validation Error */
