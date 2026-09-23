@@ -258,6 +258,27 @@ class TestRooms:
             await api.delete(f"/api/rooms/{room['id']}", headers=auth(alice_ready))
         ).status_code == 204
 
+    async def test_the_list_carries_each_rooms_roster_and_status(
+        self, api, alice_ready
+    ) -> None:
+        """What the lobby draws on every card. Returning bare rooms would make
+        the first screen after signing in issue one request per room to fill
+        itself in."""
+        agent = (
+            await api.post("/api/agents", json=AGENT, headers=auth(alice_ready))
+        ).json()
+        await api.post(
+            "/api/rooms",
+            json={**ROOM, "agent_ids": [agent["id"]]},
+            headers=auth(alice_ready),
+        )
+
+        listed = (await api.get("/api/rooms", headers=auth(alice_ready))).json()
+
+        assert len(listed) == 1
+        assert [a["id"] for a in listed[0]["agents"]] == [agent["id"]]
+        assert listed[0]["status"] == "active"
+
     async def test_a_new_room_is_active(self, api, alice_ready) -> None:
         """A user who has just created a room means to use it."""
         created = await api.post("/api/rooms", json=ROOM, headers=auth(alice_ready))
