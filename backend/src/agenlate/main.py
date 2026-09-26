@@ -34,10 +34,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """
     settings = settings or get_settings()
 
+    # The interactive docs are for whoever is developing against the API, and in
+    # production that is nobody outside this repository. Every endpoint needs a
+    # token, so publishing them leaks no data — but a browsable, clickable map
+    # of the whole API is still an invitation with nothing gained in return.
+    # `app.openapi()` still builds the schema with these off, so generating the
+    # frontend's types is unaffected.
+    docs_enabled = not settings.is_production
+
     app = FastAPI(
         title="Agenlate",
         version=__version__,
         description="Supervisor agent and roundtable orchestration.",
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
     )
 
     app.add_middleware(

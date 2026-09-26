@@ -11,8 +11,10 @@
 function required(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(
-      `Missing ${name}. Copy .env.example to .env.local and fill it in; ` +
-        `these are read at build time, so restart the dev server afterwards.`,
+      `Missing ${name}. Locally, copy .env.example to .env.local and fill it ` +
+        `in. On Vercel, add it under Project Settings → Environment ` +
+        `Variables. Either way it is read at build time, so restart the dev ` +
+        `server or redeploy afterwards.`,
     )
   }
   return value
@@ -27,9 +29,15 @@ export const env = {
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   ),
+  // Required, with no localhost fallback. A fallback is convenient locally and
+  // silently wrong in production: a deployment missing this variable would
+  // ship a site that calls each visitor's own machine, and every screen would
+  // fail with a network error that points nowhere near the cause.
+  //
   // Trailing slashes produce "//api/agents", which some proxies treat as a
   // different path than the one the backend registered.
-  apiBaseUrl: (
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000'
+  apiBaseUrl: required(
+    'NEXT_PUBLIC_API_BASE_URL',
+    process.env.NEXT_PUBLIC_API_BASE_URL,
   ).replace(/\/+$/, ''),
 } as const

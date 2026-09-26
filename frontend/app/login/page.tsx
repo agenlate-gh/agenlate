@@ -41,7 +41,16 @@ export default function LoginPage() {
 
     try {
       if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({ email, password })
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          // Sends the confirmation link back to whichever deployment the user
+          // signed up on. Without it Supabase uses the project's Site URL,
+          // which is one fixed address — wrong for every other environment.
+          // The origin must also be in the project's allowed redirect URLs,
+          // or Supabase ignores this and falls back to the Site URL anyway.
+          options: { emailRedirectTo: `${window.location.origin}/login` },
+        })
         if (error) throw error
 
         // With email confirmation on, signup succeeds but returns no session.

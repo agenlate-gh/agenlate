@@ -5,8 +5,8 @@
 # them in the dashboard and never reads them from this file — so this stays
 # committable.
 #
-# The frontend is deliberately absent until its stack is settled. It will be a
-# static site: those are free on Render and never sleep, unlike a web service.
+# The frontend is not here: it is a Next.js app deployed on Vercel from the
+# `frontend/` directory. Only the API runs on Render.
 
 services:
   - type: web
@@ -40,9 +40,10 @@ services:
       - key: API_ENV
         value: production
 
-      # Set once the frontend has a URL. Production refuses a wildcard, so this
-      # must name the real origin. Until then only local development can reach
-      # the API from a browser.
+      # The Vercel origin, e.g. https://agenlate.vercel.app — no trailing
+      # slash, no path. Comma-separate several (a custom domain as well as the
+      # vercel.app one). Production refuses a wildcard, so this must name the
+      # real origin, and a browser on any origin not listed is refused.
       - key: API_CORS_ORIGINS
         sync: false
 

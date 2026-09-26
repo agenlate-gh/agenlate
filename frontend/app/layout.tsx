@@ -1,6 +1,7 @@
 import { Analytics } from '@vercel/analytics/next'
 
 import { AuthProvider } from '@/components/auth-provider'
+import { WakeBackend } from '@/components/wake-backend'
 import type { Metadata, Viewport } from 'next'
 import { Poppins } from 'next/font/google'
 import './globals.css'
@@ -47,6 +48,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="font-sans antialiased overflow-hidden">
+        <WakeBackend />
         <AuthProvider>{children}</AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
