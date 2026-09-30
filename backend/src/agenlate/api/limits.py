@@ -105,3 +105,61 @@ def reset_run_limiter() -> None:
     """For tests. Process-wide state otherwise leaks between them."""
     global _limiter
     _limiter = RunLimiter()
+
+
+# -- anonymous endpoints ------------------------------------------------------
+
+
+class WindowLimiter:
+    """At most ``limit`` requests per key in a sliding window.
+
+    For the endpoints that take no login — joining the waitlist and signing up
+    with a code — where the only thing to key on is the caller's address. It
+    will not stop a determined attacker with many addresses; it stops a script
+    in a loop, which is the realistic abuse of a public form. In memory for the
+    same reason as the run limiter: one instance.
+    """
+
+    def __init__(self, limit: int, window_seconds: int) -> None:
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self._hits: dict[str, deque[float]] = defaultdict(deque)
+
+    def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        hits = self._hits[key]
+        while hits and now - hits[0] >= self.window_seconds:
+            hits.popleft()
+        if len(hits) >= self.limit:
+            return False
+        hits.append(now)
+        return True
+
+
+def client_address(request) -> str:
+    """The caller's address, as the edge proxy saw it.
+
+    Render and Vercel sit in front of the app, so the socket's peer is their
+    proxy, not the person. The first entry of X-Forwarded-For is the client.
+    It can be forged by a caller who sends their own header — which only lets
+    them rotate their own rate-limit bucket, the same as changing address.
+    """
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+_anonymous_limiters: dict[str, WindowLimiter] = {}
+
+
+def anonymous_limiter(name: str, limit: int, window_seconds: int) -> WindowLimiter:
+    """One shared limiter per endpoint, created on first use."""
+    if name not in _anonymous_limiters:
+        _anonymous_limiters[name] = WindowLimiter(limit, window_seconds)
+    return _anonymous_limiters[name]
+
+
+def reset_anonymous_limiters() -> None:
+    """For tests."""
+    _anonymous_limiters.clear()

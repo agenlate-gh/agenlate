@@ -26,12 +26,16 @@ from .. import invites
 from ..db import create_service_client
 from ..repository import invites as invites_repo
 from .deps import settings_for
+from .limits import anonymous_limiter, client_address
 
 router = APIRouter(prefix="/api", tags=["signup"])
 log = logging.getLogger("agenlate.signup")
 
 PASSWORD_MIN = 8
 PASSWORD_MAX = 72  # bcrypt ignores everything past 72 bytes
+
+SIGNUPS_PER_ADDRESS = 10
+SIGNUP_WINDOW_SECONDS = 600
 
 INVALID_CODE = "This invite code is not valid, or it has already been used."
 
@@ -61,6 +65,16 @@ class SignupResponse(BaseModel):
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 async def signup(body: SignupRequest, request: Request) -> SignupResponse:
     """Create an account, spending one invite code."""
+    # Codes are too long to guess, but a limit per address still turns a script
+    # trying them into one that gets ten tries every ten minutes.
+    if not anonymous_limiter("signup", SIGNUPS_PER_ADDRESS, SIGNUP_WINDOW_SECONDS).allow(
+        client_address(request)
+    ):
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Too many attempts from here. Try again in a few minutes.",
+        )
+
     code = invites.normalize(body.invite_code)
     if code is None:
         # The same answer as a code that does not exist or is spent, so the

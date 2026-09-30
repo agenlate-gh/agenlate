@@ -137,6 +137,35 @@ class TestInviteSignup:
         assert code not in response.text
 
 
+class TestWaitlist:
+    @pytest_asyncio.fixture
+    async def email(self, service):
+        value = f"it-waitlist-{uuid.uuid4().hex[:12]}@agenlate.dev"
+        yield value
+        await service.table("waitlist").delete().eq("email", value).execute()
+
+    async def test_joining_twice_stores_one_entry(self, api, service, email) -> None:
+        for _ in range(2):
+            response = await api.post("/api/waitlist", json={"email": email.upper()})
+            assert response.status_code == 202
+
+        rows = (await service.table("waitlist").select("*").eq("email", email).execute()).data
+        assert len(rows) == 1
+        assert rows[0]["source"] == "landing"
+
+    async def test_the_browser_cannot_read_the_list(self, api, settings, email) -> None:
+        await api.post("/api/waitlist", json={"email": email})
+        anon = settings.supabase_anon_key.get_secret_value()
+        async with httpx.AsyncClient(timeout=30) as http:
+            response = await http.get(
+                f"{settings.supabase_url}/rest/v1/waitlist",
+                params={"select": "email"},
+                headers={"apikey": anon, "Authorization": f"Bearer {anon}"},
+            )
+
+        assert email not in response.text
+
+
 class TestUserMessages:
     @pytest_asyncio.fixture
     async def room(self, api, alice):

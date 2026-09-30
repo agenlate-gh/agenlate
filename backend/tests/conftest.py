@@ -10,8 +10,22 @@ from __future__ import annotations
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from agenlate.api.limits import reset_anonymous_limiters
 from agenlate.config import Settings
 from agenlate.main import create_app
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """Every test starts with empty per-address limits.
+
+    They are process-wide, and every test client shares one address — so
+    without this, the tests' own requests would add up across the suite and
+    start tripping the limits they are not about.
+    """
+    reset_anonymous_limiters()
+    yield
+    reset_anonymous_limiters()
 
 
 @pytest.fixture

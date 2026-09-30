@@ -3,6 +3,8 @@
     python -m agenlate.manage invites create --count 20 --label casa212
     python -m agenlate.manage invites list
     python -m agenlate.manage invites list --unused
+    python -m agenlate.manage waitlist list
+    python -m agenlate.manage waitlist list --waiting
 
 Kept apart from ``agenlate.cli``, which runs roundtables: those need a user's
 OpenRouter key, these need the service-role key, and a single entry point
@@ -20,6 +22,7 @@ from . import invites
 from .config import get_settings
 from .db import create_service_client
 from .repository import invites as invites_repo
+from .repository import waitlist as waitlist_repo
 
 MAX_BATCH = 200
 
@@ -64,6 +67,20 @@ async def _list(unused_only: bool) -> int:
     return 0
 
 
+async def _waitlist(waiting_only: bool) -> int:
+    client = await create_service_client(get_settings())
+    try:
+        entries = await waitlist_repo.list_entries(client, waiting_only=waiting_only)
+    finally:
+        await client.postgrest.aclose()
+
+    print(f"{len(entries)} {'waiting' if waiting_only else 'on the waitlist'}\n")
+    for e in entries:
+        state = f"invited {e.invited_at:%Y-%m-%d}" if e.invited_at else "waiting"
+        print(f"  {e.created_at:%Y-%m-%d}  {e.email:<40} {state:<18} {e.source}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m agenlate.manage")
     area = parser.add_subparsers(dest="area", required=True)
@@ -78,7 +95,14 @@ def main(argv: list[str] | None = None) -> int:
     listing = action.add_parser("list", help="show codes and whether each is used")
     listing.add_argument("--unused", action="store_true", help="only codes still available")
 
+    wl = area.add_parser("waitlist", help="people who asked to join the Beta")
+    wl_action = wl.add_subparsers(dest="action", required=True)
+    wl_list = wl_action.add_parser("list", help="show the waitlist, oldest first")
+    wl_list.add_argument("--waiting", action="store_true", help="only people not yet invited")
+
     args = parser.parse_args(argv)
+    if args.area == "waitlist":
+        return asyncio.run(_waitlist(args.waiting))
     if args.action == "create":
         return asyncio.run(_create(args.count, args.label))
     return asyncio.run(_list(args.unused))
