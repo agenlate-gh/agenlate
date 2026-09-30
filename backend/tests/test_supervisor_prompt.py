@@ -79,6 +79,16 @@ class TestSystemPrompt:
     def test_carries_the_objective_verbatim(self) -> None:
         assert OBJECTIVE in build_system_prompt(make_room())
 
+    def test_says_who_user_messages_come_from(self) -> None:
+        """A reply typed into the room is only useful if the Supervisor reads
+        it as the owner's direction rather than one more line of transcript."""
+        from agenlate.models import USER_EMITTER_NAME
+
+        prompt = build_system_prompt(make_room())
+
+        assert f"[{USER_EMITTER_NAME}]" in prompt
+        assert "outrank" in prompt
+
     def test_lists_every_agent(self) -> None:
         prompt = build_system_prompt(make_room(agent_count=3))
 

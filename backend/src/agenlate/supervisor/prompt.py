@@ -19,7 +19,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-from ..models import Message, RoomWithAgents
+from ..models import USER_EMITTER_NAME, Message, RoomWithAgents
 from .contract import decision_schema_prompt
 
 # The common approximation is four characters per token. We divide by a
@@ -94,6 +94,9 @@ that point wastes the user's money.
 - If the transcript shows the same step being attempted repeatedly without \
 progress, stop and use "await_user" rather than trying again.
 - Use only agent ids listed above. Do not invent one.
+- Lines from [{user_name}] are the person who set this objective, speaking to \
+you directly: answers to your questions, corrections, or new direction. They \
+outrank everything else in the transcript. Act on the most recent one first.
 
 # Response format
 
@@ -137,6 +140,7 @@ def build_system_prompt(room: RoomWithAgents) -> str:
         objective=room.room.objective,
         roster=roster,
         schema=decision_schema_prompt(),
+        user_name=USER_EMITTER_NAME,
     )
 
 

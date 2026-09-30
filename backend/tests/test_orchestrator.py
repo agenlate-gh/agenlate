@@ -165,6 +165,38 @@ class TestCompleteRun:
         ]
         assert store.messages[1].content == "Found it."
 
+    async def test_the_answer_is_saved_not_just_streamed(self) -> None:
+        """What the Supervisor tells the user when it finishes is the result of
+        the whole run. If it lived only in the stream, reloading the room would
+        lose it."""
+        llm = FakeLLM([dispatch("agent-1", "Research"), "Found it.", finish("Here is your post.")])
+        store = MemoryStore()
+
+        await drain(make_room(), llm, store)
+
+        assert store.messages[-1].emitter is Emitter.SUPERVISOR
+        assert store.messages[-1].content == "Here is your post."
+
+    async def test_a_question_is_saved_so_it_can_be_answered_later(self) -> None:
+        """A user who comes back tomorrow to answer has to be able to see what
+        was asked, and the next run needs it in context to make sense of the
+        answer."""
+        llm = FakeLLM([await_user("Which country is the audience in?")])
+        store = MemoryStore()
+
+        _, result = await drain(make_room(), llm, store)
+
+        assert result.reason is TerminationReason.AWAITING_USER
+        assert store.messages[-1].content == "Which country is the audience in?"
+
+    async def test_a_dispatch_still_records_its_reasoning(self) -> None:
+        llm = FakeLLM([dispatch("agent-1", "Research"), "Found it.", finish()])
+        store = MemoryStore()
+
+        await drain(make_room(), llm, store)
+
+        assert store.messages[0].content == "Next: Research"
+
     async def test_events_arrive_in_the_order_they_happened(self) -> None:
         llm = FakeLLM([dispatch("agent-1", "Research"), "Found it.", finish()])
 

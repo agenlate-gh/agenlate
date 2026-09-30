@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 
-from . import agents, builder, keys, rooms, runs, usage
+from . import agents, builder, keys, objective, rooms, runs, signup, usage
 from ..observability import configure_logging
 from .errors import install_error_handlers
 from .middleware import RequestContextMiddleware
@@ -22,6 +22,8 @@ def install(app: FastAPI) -> None:
     app.include_router(keys.router)
     app.include_router(usage.router)
     app.include_router(builder.router)
+    app.include_router(objective.router)
+    app.include_router(signup.router)
 
 
 __all__ = ["install"]

@@ -20,10 +20,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..llm import LLMClient, Usage
-from ..structured import extract_json
+from ..structured import StructuredReplyError, complete_structured
 
 SYSTEM_PROMPT_MAX = 8000
 REPLY_MAX = 600
@@ -178,47 +178,19 @@ async def refine_agent(
     """
     system, messages = build_messages(name, role, instructions, conversation)
 
-    usage = Usage()
-    last_error = ""
-    raw = ""
-
-    for attempt in range(1, max_repair_attempts + 2):
-        response = await llm.complete(
+    try:
+        turn = await complete_structured(
+            llm,
+            BuilderReply,
             system=system,
             messages=messages,
             temperature=0.3,  # writing, but not freely
             max_tokens=4096,  # instructions can run to several pages
-            json_mode=True,
+            max_repair_attempts=max_repair_attempts,
         )
-        usage = usage + response.usage
-        raw = response.content
+    except StructuredReplyError as exc:
+        raise BuilderError(str(exc)) from None
 
-        payload = extract_json(raw)
-        if payload is None:
-            last_error = "The reply was not valid JSON."
-        else:
-            try:
-                reply = BuilderReply.model_validate(payload)
-            except ValidationError as exc:
-                last_error = "; ".join(
-                    f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}"
-                    for e in exc.errors()
-                )
-            else:
-                return BuilderTurn(
-                    reply=reply, usage=usage, model=response.model, attempts=attempt
-                )
-
-        messages = [
-            *messages,
-            {"role": "assistant", "content": raw[:1000]},
-            {
-                "role": "user",
-                "content": (
-                    f"That was not a valid reply. {last_error} "
-                    "Reply again with only the JSON object."
-                ),
-            },
-        ]
-
-    raise BuilderError(f"No usable reply after {max_repair_attempts + 1} attempts: {last_error}")
+    return BuilderTurn(
+        reply=turn.reply, usage=turn.usage, model=turn.model, attempts=turn.attempts
+    )

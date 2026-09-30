@@ -154,6 +154,24 @@ class RunResult:
         return self.final_message or self.reason.describe()
 
 
+def _note_for(decision: SupervisorDecision) -> str:
+    """What the Supervisor's turn leaves in the transcript.
+
+    For a turn that ends the run, the message to the user — the answer, or the
+    question it stopped to ask — rather than its reasoning. That message is
+    the one the user needs, and it has to survive a reload: a question that
+    lives only in the stream is gone by the time someone comes back to answer
+    it, and the next run would have no record of what was asked. Its
+    reasoning still reaches the client in the live event.
+
+    Every other turn records its reasoning, which is what explains the
+    dispatch that follows.
+    """
+    if decision.is_terminal and decision.message_to_user:
+        return decision.message_to_user
+    return decision.reasoning
+
+
 # -- the loop ---------------------------------------------------------------
 
 
@@ -223,7 +241,7 @@ async def run_room(
                 room_id=room.room.id,
                 emitter=Emitter.SUPERVISOR,
                 emitter_name=SUPERVISOR_NAME,
-                content=decision.reasoning,
+                content=_note_for(decision),
             )
         )
         history.append(note)

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel, Field, field_validator
 from supabase import AsyncClient
 
 from ..auth import CurrentUser, current_user
 from ..db import NotFoundError
-from ..models import RoomCreate, RoomUpdate
+from ..models import USER_EMITTER_NAME, Emitter, MessageCreate, RoomCreate, RoomUpdate
 from ..repository import messages as messages_repo
 from ..repository import rooms as repo
 from .deps import user_db
@@ -125,6 +126,57 @@ async def remove_agent(
 
 
 # -- transcript -------------------------------------------------------------
+
+
+USER_MESSAGE_MAX = 4000
+
+
+class UserMessageIn(BaseModel):
+    content: str = Field(min_length=1, max_length=USER_MESSAGE_MAX)
+
+    @field_validator("content")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value.strip()
+
+
+@router.post(
+    "/{room_id}/messages",
+    response_model=MessageOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_message(
+    room_id: str,
+    body: UserMessageIn,
+    user: CurrentUser = Depends(current_user),
+    db: AsyncClient = Depends(user_db),
+) -> MessageOut:
+    """Add the user's own words to the transcript.
+
+    How a user answers the Supervisor when it stops to ask something, or
+    redirects the team between runs. It does not start a run: the client does
+    that next, so a message can also be left for later without spending
+    anything.
+
+    The emitter is fixed here rather than taken from the request. A client
+    that could choose it could write lines attributed to the Supervisor or an
+    agent into the record of what happened.
+    """
+    if await repo.get_room(db, room_id) is None:
+        raise NotFoundError(room_id)
+
+    message = await messages_repo.append_message(
+        db,
+        MessageCreate(
+            room_id=room_id,
+            emitter=Emitter.USER,
+            emitter_name=USER_EMITTER_NAME,
+            content=body.content,
+        ),
+    )
+    return MessageOut.of(message)
 
 
 @router.get("/{room_id}/messages", response_model=MessagePage)

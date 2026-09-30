@@ -24,6 +24,15 @@ ROOM_NAME_MAX = 200
 OBJECTIVE_MAX = 4000
 
 
+USER_EMITTER_NAME = "User"
+"""How the room's owner appears in the transcript.
+
+A role rather than their name or email. The Supervisor is told what this name
+means, and an email address in every prompt would be personal data sent to a
+model provider on each turn for no benefit to the decision.
+"""
+
+
 class Emitter(str, Enum):
     """Who produced a message. Drives how it renders into Supervisor context."""
 
