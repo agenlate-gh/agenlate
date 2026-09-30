@@ -60,6 +60,11 @@ function Room() {
   const [activity, setActivity] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const [runCost, setRunCost] = useState(0)
+  /**
+   * The Supervisor's question, when the last run stopped to ask one. Not an
+   * error: the run did what it should, and the next step is the user's.
+   */
+  const [awaiting, setAwaiting] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const load = useCallback(async () => {
@@ -95,14 +100,45 @@ function Room() {
   // watching and everybody is paying for. Closing the connection stops it.
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  async function start() {
-    const apiKey = readKey()
-    if (!apiKey) {
-      setRunError('Add your OpenRouter key before starting a run.')
+  /** Why a run cannot start right now, or null if it can. */
+  function blockedReason(): string | null {
+    if (!readKey()) return 'Add your OpenRouter key before starting a run.'
+    if (!room || room.agents.length === 0) return 'Seat at least one agent before starting a run.'
+    return null
+  }
+
+  /**
+   * Sends what the user typed, then runs the room so the team acts on it.
+   *
+   * Checked before posting rather than after: saving a message and then
+   * failing to run would leave the user wondering whether anything happened.
+   * With nothing typed this simply starts or continues the run.
+   */
+  async function sendAndRun(content: string) {
+    const blocked = blockedReason()
+    if (blocked) {
+      setRunError(blocked)
       return
     }
-    if (!room || room.agents.length === 0) {
-      setRunError('Seat at least one agent before starting a run.')
+    if (content.trim()) {
+      try {
+        const message = await roomsApi.postMessage(roomId, content.trim())
+        setTranscript((prev) => [...prev, message])
+      } catch (cause) {
+        setRunError(
+          cause instanceof ApiError ? cause.message : 'Could not send your message.',
+        )
+        return
+      }
+    }
+    await start()
+  }
+
+  async function start() {
+    const apiKey = readKey()
+    const blocked = blockedReason()
+    if (blocked || !apiKey) {
+      setRunError(blocked ?? 'Add your OpenRouter key before starting a run.')
       return
     }
 
@@ -110,6 +146,7 @@ function Room() {
     abortRef.current = controller
     setRunning(true)
     setRunError(null)
+    setAwaiting(null)
     setRunCost(0)
     setActivity('Supervisor is deciding what happens next…')
 
@@ -164,7 +201,13 @@ function Room() {
         break
       case 'run_finished':
         setActivity(null)
-        if (!event.succeeded) setRunError(event.detail ?? event.explanation)
+        if (event.reason === 'awaiting_user') {
+          // The question itself is already in the transcript as the
+          // Supervisor's last message; this puts it next to the reply box.
+          setAwaiting(event.final_message ?? event.explanation)
+        } else if (!event.succeeded) {
+          setRunError(event.detail ?? event.explanation)
+        }
         break
     }
   }
@@ -359,7 +402,8 @@ function Room() {
               activity={activity}
               error={runError}
               cost={runCost}
-              onStart={() => void start()}
+              awaiting={awaiting}
+              onSend={(content) => sendAndRun(content)}
               onStop={stop}
               onDismissError={() => setRunError(null)}
             />

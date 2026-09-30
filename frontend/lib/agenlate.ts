@@ -34,6 +34,8 @@ export type DailyUsage = Schemas['DailyUsage']
 export type UsageEvent = Schemas['UsageEventOut']
 export type BuilderResponse = Schemas['BuilderResponse']
 export type BuilderMessage = Schemas['BuilderMessage']
+export type ObjectiveResponse = Schemas['ObjectiveResponse']
+export type SignupRequest = Schemas['SignupRequest']
 
 // -- agents -----------------------------------------------------------------
 
@@ -92,6 +94,26 @@ export const rooms = {
    * A page of transcript, ordered. Paged by `seq` rather than an offset,
    * because a transcript grows while it is being read.
    */
+  /**
+   * Adds the user's own words to the transcript — an answer to the
+   * Supervisor, or new direction. Does not start a run; the caller does that.
+   */
+  postMessage: (roomId: string, content: string) =>
+    api.post<Message>(`/api/rooms/${roomId}/messages`, { content }),
+
+  /**
+   * One turn of the conversation that writes a room's objective. Returns a
+   * draft for the form; nothing is saved. Runs before the room exists, so it
+   * takes the form's current values rather than a room id.
+   */
+  draftObjective: (body: {
+    api_key: string
+    conversation: BuilderMessage[]
+    name?: string | null
+    objective?: string | null
+    model?: string
+  }) => api.post<ObjectiveResponse>('/api/rooms/objective-draft', body),
+
   messages: (roomId: string, options: { afterSeq?: number; limit?: number } = {}) => {
     const query = new URLSearchParams()
     if (options.afterSeq !== undefined) query.set('after_seq', String(options.afterSeq))
@@ -99,6 +121,17 @@ export const rooms = {
     const suffix = query.toString() ? `?${query}` : ''
     return api.get<MessagePage>(`/api/rooms/${roomId}/messages${suffix}`)
   },
+}
+
+// -- accounts ---------------------------------------------------------------
+
+export const accounts = {
+  /**
+   * Creates an account with an invite code. The only way in during the Beta:
+   * public signup is off, so the code is checked and spent on the server.
+   * The account comes back confirmed; the caller signs in with it next.
+   */
+  signUp: (body: SignupRequest) => api.postAnonymous<unknown>('/api/signup', body),
 }
 
 // -- keys and usage ---------------------------------------------------------

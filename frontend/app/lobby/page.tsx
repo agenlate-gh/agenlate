@@ -12,10 +12,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { LayoutDashboard, Loader2, Plus, Trash2 } from 'lucide-react'
+import { LayoutDashboard, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react'
 
 import { RequireAuth } from '@/components/auth-provider'
 import { LobbySidebar } from '@/components/lobby-sidebar'
+import { ObjectiveHelper } from '@/components/objective-helper'
 import { TopNavbar } from '@/components/top-navbar'
 import {
   Dialog,
@@ -339,6 +340,7 @@ function CreateRoomDialog({
 }) {
   const [name, setName] = useState('')
   const [objective, setObjective] = useState('')
+  const [helping, setHelping] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -372,11 +374,12 @@ function CreateRoomDialog({
         if (!next) {
           setName('')
           setObjective('')
+          setHelping(false)
           setError(null)
         }
       }}
     >
-      <DialogContent>
+      <DialogContent className={helping ? 'max-w-xl' : undefined}>
         <DialogTitle>New room</DialogTitle>
         <DialogDescription>
           A room is one objective and the agents working on it. Say what it should
@@ -397,9 +400,23 @@ function CreateRoomDialog({
             />
           </label>
 
-          <label className="flex flex-col gap-1.5">
-            <span className={LABEL_CLASS}>Objective</span>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label htmlFor="room-objective" className={LABEL_CLASS}>
+                Objective
+              </label>
+              <button
+                type="button"
+                onClick={() => setHelping((open) => !open)}
+                aria-expanded={helping}
+                className="inline-flex items-center gap-1 text-[11.5px] font-medium text-[#FFF41F] transition-opacity hover:opacity-80"
+              >
+                <Sparkles className="size-3.5" />
+                {helping ? 'Hide helper' : 'Write it with AI'}
+              </button>
+            </div>
             <textarea
+              id="room-objective"
               value={objective}
               onChange={(event) => setObjective(event.target.value)}
               required
@@ -408,7 +425,20 @@ function CreateRoomDialog({
               className={`${FIELD_CLASS} resize-none leading-relaxed`}
               placeholder="Review the release candidate for blocking issues and report what must be fixed before it ships."
             />
-          </label>
+          </div>
+
+          {helping && (
+            <ObjectiveHelper
+              name={name}
+              objective={objective}
+              onUse={(written, suggestedName) => {
+                setObjective(written)
+                // Only fill an empty name. Overwriting one the user typed
+                // would undo a decision they already made.
+                if (suggestedName && !name.trim()) setName(suggestedName)
+              }}
+            />
+          )}
 
           {error && (
             <p role="alert" className="text-[12px] font-light text-[#FCA5A5]">

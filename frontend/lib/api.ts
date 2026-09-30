@@ -16,6 +16,8 @@ import { getAccessToken } from './supabase'
 export type ApiErrorCode =
   | 'unauthenticated'
   | 'not_found'
+  | 'bad_request'
+  | 'conflict'
   | 'invalid_request'
   | 'key_rejected'
   | 'out_of_credit'
@@ -86,6 +88,7 @@ async function toApiError(response: Response): Promise<ApiError> {
 async function request<T>(
   path: string,
   init: RequestInit = {},
+  { anonymous = false }: { anonymous?: boolean } = {},
 ): Promise<T> {
   let response: Response
   try {
@@ -93,7 +96,7 @@ async function request<T>(
       ...init,
       headers: {
         'Content-Type': 'application/json',
-        ...(await authHeaders()),
+        ...(anonymous ? {} : await authHeaders()),
         ...init.headers,
       },
     })
@@ -123,6 +126,18 @@ export const api = {
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   put: <T>(path: string) => request<T>(path, { method: 'PUT' }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+
+  /**
+   * A POST sent without a token, for the one thing a person does before they
+   * have one: signing up. Separate and explicit rather than a flag on `post`,
+   * so an authenticated call cannot lose its token by accident.
+   */
+  postAnonymous: <T>(path: string, body: unknown) =>
+    request<T>(
+      path,
+      { method: 'POST', body: JSON.stringify(body) },
+      { anonymous: true },
+    ),
 
   /**
    * The base URL, for the one request that cannot go through `fetch` here:

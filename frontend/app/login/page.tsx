@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import { KeyRound, Loader2 } from 'lucide-react'
 
 import { useAuth } from '@/components/auth-provider'
+import { accounts } from '@/lib/agenlate'
 import { supabase } from '@/lib/supabase'
 
 type Mode = 'signin' | 'signup'
@@ -24,46 +25,42 @@ export default function LoginPage() {
   const [mode, setMode] = useState<Mode>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
 
   // Someone already signed in has no business here.
   useEffect(() => {
     if (!sessionLoading && session) router.replace('/lobby')
   }, [session, sessionLoading, router])
 
+  // An invite shared as a link — /login?invite=K7QM-4XRT-WN2P — opens straight
+  // on sign-up with the code filled in, so the person receiving it does not
+  // have to copy a code from one place to another. Read from the location
+  // after mount rather than through useSearchParams, which would force this
+  // page out of static rendering for one optional value.
+  useEffect(() => {
+    const invite = new URLSearchParams(window.location.search).get('invite')
+    if (invite) {
+      setInviteCode(invite)
+      setMode('signup')
+    }
+  }, [])
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     setError(null)
-    setNotice(null)
     setBusy(true)
 
     try {
       if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          // Sends the confirmation link back to whichever deployment the user
-          // signed up on. Without it Supabase uses the project's Site URL,
-          // which is one fixed address — wrong for every other environment.
-          // The origin must also be in the project's allowed redirect URLs,
-          // or Supabase ignores this and falls back to the Site URL anyway.
-          options: { emailRedirectTo: `${window.location.origin}/login` },
-        })
-        if (error) throw error
-
-        // With email confirmation on, signup succeeds but returns no session.
-        // Saying nothing here leaves the user staring at an unchanged form.
-        if (!data.session) {
-          setNotice('Check your email to confirm your account, then sign in.')
-          setMode('signin')
-          return
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
+        // Through our API, not supabase.auth.signUp: public signup is off, and
+        // the code has to be checked and spent on the server to mean anything.
+        // The account comes back confirmed, so signing in straight away works.
+        await accounts.signUp({ email, password, invite_code: inviteCode })
       }
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
       router.replace('/lobby')
     } catch (cause) {
       setError(
@@ -125,14 +122,30 @@ export default function LoginPage() {
             />
           </label>
 
+          {isSignUp && (
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-[#7d7d82]">
+                Invite code
+              </span>
+              <input
+                type="text"
+                value={inviteCode}
+                onChange={(event) => setInviteCode(event.target.value)}
+                required
+                autoComplete="off"
+                spellCheck={false}
+                className="rounded-lg border border-[#16161a] bg-[#141414] px-3.5 py-2.5 font-mono text-[14px] uppercase tracking-wider text-white outline-none transition-colors placeholder:normal-case placeholder:tracking-normal placeholder:text-[#52525B] focus:border-[#FFF41F]/50"
+                placeholder="XXXX-XXXX-XXXX"
+              />
+              <span className="text-[11px] font-light leading-relaxed text-[#7d7d82]">
+                Agenlate is in a small, invite-only Beta.
+              </span>
+            </label>
+          )}
+
           {error && (
             <p role="alert" className="text-[12px] font-light leading-relaxed text-[#FCA5A5]">
               {error}
-            </p>
-          )}
-          {notice && (
-            <p className="text-[12px] font-light leading-relaxed text-green-500">
-              {notice}
             </p>
           )}
 
@@ -153,8 +166,7 @@ export default function LoginPage() {
             onClick={() => {
               setMode(isSignUp ? 'signin' : 'signup')
               setError(null)
-              setNotice(null)
-            }}
+                      }}
             className="font-medium text-[#FFF41F] transition-opacity hover:opacity-80"
           >
             {isSignUp ? 'Sign in' : 'Create one'}

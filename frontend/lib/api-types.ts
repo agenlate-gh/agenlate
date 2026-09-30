@@ -142,7 +142,20 @@ export interface paths {
          */
         get: operations["list_messages_api_rooms__room_id__messages_get"];
         put?: never;
-        post?: never;
+        /**
+         * Post Message
+         * @description Add the user's own words to the transcript.
+         *
+         *     How a user answers the Supervisor when it stops to ask something, or
+         *     redirects the team between runs. It does not start a run: the client does
+         *     that next, so a message can also be left for later without spending
+         *     anything.
+         *
+         *     The emitter is fixed here rather than taken from the request. A client
+         *     that could choose it could write lines attributed to the Supervisor or an
+         *     agent into the record of what happened.
+         */
+        post: operations["post_message_api_rooms__room_id__messages_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -301,6 +314,46 @@ export interface paths {
          * @description Take one turn of the conversation that writes an agent's instructions.
          */
         post: operations["build_agent_api_agents__agent_id__builder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rooms/objective-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draft Objective
+         * @description Take one turn of the conversation that writes a room's objective.
+         */
+        post: operations["draft_objective_api_rooms_objective_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Signup
+         * @description Create an account, spending one invite code.
+         */
+        post: operations["signup_api_signup_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -488,6 +541,44 @@ export interface components {
              */
             next_after_seq?: number | null;
         };
+        /** ObjectiveRequest */
+        ObjectiveRequest: {
+            /**
+             * Api Key
+             * Format: password
+             */
+            api_key: string;
+            /** Conversation */
+            conversation?: components["schemas"]["BuilderMessage"][];
+            /**
+             * Model
+             * @default qwen/qwen3.7-flash
+             */
+            model: string;
+            /** Name */
+            name?: string | null;
+            /**
+             * Objective
+             * @description What the form holds now, so a revision keeps what the user did not change.
+             */
+            objective?: string | null;
+        };
+        /** ObjectiveResponse */
+        ObjectiveResponse: {
+            /** Reply */
+            reply: string;
+            /** Objective */
+            objective: string | null;
+            /**
+             * Name
+             * @description A suggested room name, only when the room had none.
+             */
+            name?: string | null;
+            /** Needs Answer */
+            needs_answer: boolean;
+            /** Cost Usd */
+            cost_usd?: number | null;
+        };
         /**
          * RoomDetailOut
          * @description A room together with its roster.
@@ -615,6 +706,25 @@ export interface components {
             /** Spend Cap Usd */
             spend_cap_usd?: number | null;
         };
+        /** SignupRequest */
+        SignupRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+            /** Invite Code */
+            invite_code: string;
+        };
+        /** SignupResponse */
+        SignupResponse: {
+            /** Email */
+            email: string;
+            /**
+             * Message
+             * @default Account created. Sign in with your email and password.
+             */
+            message: string;
+        };
         /**
          * UsageEventOut
          * @description One provider call, as the audit log shows it.
@@ -694,6 +804,11 @@ export interface components {
              * @description Reported cost of those requests. A web search costs roughly forty times the tokens of a room, so this is where spending actually comes from.
              */
             tool_enabled_cost_usd: number;
+        };
+        /** UserMessageIn */
+        UserMessageIn: {
+            /** Content */
+            content: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -1127,6 +1242,41 @@ export interface operations {
             };
         };
     };
+    post_message_api_rooms__room_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                room_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserMessageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     start_run_api_rooms__room_id__run_post: {
         parameters: {
             query?: never;
@@ -1342,6 +1492,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuilderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    draft_objective_api_rooms_objective_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ObjectiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObjectiveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    signup_api_signup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignupResponse"];
                 };
             };
             /** @description Validation Error */

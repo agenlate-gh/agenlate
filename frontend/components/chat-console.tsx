@@ -11,8 +11,8 @@
  * the line saying who is working right now, which comes from the stream.
  */
 
-import { useEffect, useRef } from 'react'
-import { Loader2, Play, Square, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Loader2, MessageCircleQuestion, Play, Send, Square, X } from 'lucide-react'
 
 import {
   Collapsible,
@@ -30,7 +30,8 @@ export function ChatConsole({
   activity,
   error,
   cost,
-  onStart,
+  awaiting,
+  onSend,
   onStop,
   onDismissError,
 }: {
@@ -41,11 +42,27 @@ export function ChatConsole({
   activity: string | null
   error: string | null
   cost: number
-  onStart: () => void
+  /** The Supervisor's question, when the last run stopped to ask one. */
+  awaiting: string | null
+  /** Sends what was typed (possibly nothing) and runs the room. */
+  onSend: (content: string) => Promise<void>
   onStop: () => void
   onDismissError: () => void
 }) {
   const feedRef = useRef<HTMLDivElement>(null)
+  const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
+
+  async function submit() {
+    if (running || sending) return
+    setSending(true)
+    try {
+      await onSend(draft)
+      setDraft('')
+    } finally {
+      setSending(false)
+    }
+  }
 
   // Follows the run. Only while something is happening — scrolling the feed
   // out from under someone reading old messages is worse than not following.
@@ -126,6 +143,18 @@ export function ChatConsole({
             </div>
           )}
 
+          {awaiting && !running && (
+            <div className="shrink-0 border-t border-[#FFF41F]/20 bg-[#FFF41F]/[0.04] px-5 py-3">
+              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#FFF41F]">
+                <MessageCircleQuestion className="size-3.5" strokeWidth={2} />
+                The Supervisor needs your input
+              </p>
+              <p className="mt-1 whitespace-pre-wrap text-[12.5px] font-light leading-relaxed text-[#d4d4d8]">
+                {awaiting}
+              </p>
+            </div>
+          )}
+
           <div className="shrink-0 border-t border-[#16161a] px-5 py-4">
             {running ? (
               <button
@@ -137,15 +166,54 @@ export function ChatConsole({
                 Stop the run
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={onStart}
-                disabled={paused || empty}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#FFF41F] px-4 py-2.5 text-[13px] font-semibold text-[#0A0A0A] transition-all hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void submit()
+                }}
+                className="flex flex-col gap-2"
               >
-                <Play className="size-3.5" strokeWidth={2.5} />
-                {transcript.length === 0 ? 'Start the run' : 'Continue the run'}
-              </button>
+                <textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    // Enter sends, Shift+Enter starts a new line — the
+                    // convention in every chat box people already use.
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault()
+                      void submit()
+                    }
+                  }}
+                  disabled={paused || empty || sending}
+                  rows={2}
+                  maxLength={4000}
+                  aria-label="Message to the team"
+                  placeholder={
+                    awaiting
+                      ? 'Answer the Supervisor…'
+                      : 'Give the team direction, or leave empty to just run…'
+                  }
+                  className="w-full resize-none rounded-lg border border-[#16161a] bg-[#141414] px-3.5 py-2.5 text-[13px] font-light leading-relaxed text-white outline-none transition-colors placeholder:text-[#52525B] focus:border-[#FFF41F]/50 disabled:opacity-50"
+                />
+                <button
+                  type="submit"
+                  disabled={paused || empty || sending}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#FFF41F] px-4 py-2.5 text-[13px] font-semibold text-[#0A0A0A] transition-all hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {sending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : draft.trim() ? (
+                    <Send className="size-3.5" strokeWidth={2.5} />
+                  ) : (
+                    <Play className="size-3.5" strokeWidth={2.5} />
+                  )}
+                  {draft.trim()
+                    ? 'Send and continue'
+                    : transcript.length === 0
+                      ? 'Start the run'
+                      : 'Continue the run'}
+                </button>
+              </form>
             )}
 
             <p className="mt-2 text-center text-[11px] font-light leading-relaxed text-[#7d7d82]">
@@ -153,7 +221,9 @@ export function ChatConsole({
                 ? 'This room is paused. Resume it on the left to run it.'
                 : empty
                   ? 'Seat at least one agent before running.'
-                  : 'Runs use your own OpenRouter key and spend your credit.'}
+                  : running
+                    ? 'You can reply once the run pauses or finishes.'
+                    : 'Runs use your own OpenRouter key and spend your credit.'}
             </p>
           </div>
         </CollapsibleContent>
@@ -179,6 +249,21 @@ function MessageBlock({ message, room }: { message: Message; room: RoomDetail })
           {message.content}
         </span>
         <span className="h-px flex-1 bg-[#16161a]" />
+      </div>
+    )
+  }
+
+  // The user's own words, shaped like a sent message rather than another
+  // speaker at the table: they are direction to the team, not a turn in it.
+  if (message.emitter === 'user') {
+    return (
+      <div className="flex flex-col items-end gap-1">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-[#7d7d82]">
+          You
+        </span>
+        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[#2F2F33] px-3.5 py-2.5 text-[13px] font-light leading-relaxed text-white">
+          {message.content}
+        </p>
       </div>
     )
   }
