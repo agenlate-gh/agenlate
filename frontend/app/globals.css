@@ -2,6 +2,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* dark: follows the `dark` class on <html>, which the layout sets by default.
+   Without this, Tailwind v4 ties dark: to the operating system's setting, so
+   anyone whose OS is in light mode saw a white top bar and near-black headings
+   on the dark pages. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
   --radius: 0.5rem;

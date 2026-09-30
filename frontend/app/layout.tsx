@@ -8,12 +8,14 @@ import './globals.css'
 
 /**
  * Blocking, pre-paint theme bootstrap.
- * Light mode is the DEFAULT: <html> simply has no theme class. The Bunker dark
- * theme is restored by adding `dark` to <html> here — before the first paint —
- * so the operator never sees a flash of the wrong theme. Keep the storage key
- * and class name in sync with `components/theme-toggle.tsx`.
+ *
+ * Dark is the default. Every screen paints a dark background of its own, and
+ * most text colours only switch to light under the `dark` class — so in light
+ * mode headings rendered near-black on near-black and the top bar was the one
+ * white strip on the page. Light mode is kept only for someone who has
+ * explicitly stored it. Set before first paint so there is no flash.
  */
-const themeInitScript = `(function(){try{var stored=window.localStorage.getItem('agenlate-theme');var dark=stored==='dark';var root=document.documentElement;root.classList.toggle('dark',dark);root.style.colorScheme=dark?'dark':'light'}catch(e){}})()`
+const themeInitScript = `(function(){var root=document.documentElement;var dark=true;try{dark=window.localStorage.getItem('agenlate-theme')!=='light'}catch(e){}root.classList.toggle('dark',dark);root.style.colorScheme=dark?'dark':'light'})()`
 
 const poppins = Poppins({
   subsets: ['latin'],

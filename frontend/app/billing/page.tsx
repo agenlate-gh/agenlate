@@ -70,6 +70,11 @@ function Billing() {
     void load(days)
   }, [days, load])
 
+  // Nothing has arrived yet. Distinct from "arrived and is zero": showing
+  // $0.0000 while the request is in flight tells a user who has spent money
+  // that they have not.
+  const loading = summary === null && !error
+
   return (
     <div className="flex h-screen max-h-screen w-full flex-col overflow-hidden bg-[#0a0a0a] text-foreground">
       <TopNavbar />
@@ -112,7 +117,7 @@ function Billing() {
               </div>
             )}
 
-            <SpentPanel summary={summary} days={days} />
+            <SpentPanel summary={summary} days={days} loading={loading} />
 
             <div className="mb-4 flex items-center gap-2 px-1">
               {WINDOWS.map((window) => (
@@ -133,10 +138,14 @@ function Billing() {
             </div>
 
             <div className="mb-6">
-              <ConsumptionChart series={series} />
+              {loading ? (
+                <div className="h-[226px] animate-pulse rounded-lg border border-[#262629] bg-[#0f0f0f]" aria-hidden />
+              ) : (
+                <ConsumptionChart series={series} />
+              )}
             </div>
 
-            <AuditLog events={events} />
+            <AuditLog events={events} loading={loading} />
           </div>
         </div>
       </div>
@@ -147,9 +156,11 @@ function Billing() {
 function SpentPanel({
   summary,
   days,
+  loading,
 }: {
   summary: UsageSummary | null
   days: number
+  loading: boolean
 }) {
   const spent = summary?.cost_usd ?? 0
   // A total is a floor rather than a total whenever the provider left calls
@@ -166,10 +177,19 @@ function SpentPanel({
       </div>
 
       <div className="flex flex-wrap items-baseline gap-3">
-        <span className="text-[36px] font-semibold tracking-tight text-white">
-          {incomplete && <span className="text-[24px] text-[#7d7d82]">at least </span>}
-          {formatUsd(spent)}
-        </span>
+        {loading ? (
+          <span
+            className="inline-block h-[40px] w-40 animate-pulse rounded-md bg-[#1f1f23]"
+            aria-label="Loading what you have spent"
+          />
+        ) : (
+          <span className="text-[36px] font-semibold tracking-tight text-white">
+            {incomplete && <span className="text-[24px] text-[#7d7d82]">at least </span>}
+            {/* A dash when the request failed: the error above says why, and
+                a zero here would contradict it. */}
+            {summary ? formatUsd(spent) : '—'}
+          </span>
+        )}
         <span className="text-[15px] font-light text-[#a1a1aa]">USD</span>
         <a
           href="https://openrouter.ai/credits"
@@ -234,14 +254,18 @@ function Stat({
   )
 }
 
-function AuditLog({ events }: { events: UsageEvent[] }) {
+function AuditLog({ events, loading }: { events: UsageEvent[]; loading: boolean }) {
   return (
     <div className="mb-6 px-1">
       <h3 className="mb-4 text-[12px] font-semibold uppercase tracking-wide text-[#7d7d82]">
         Consumption Audit Log
       </h3>
 
-      {events.length === 0 ? (
+      {loading ? (
+        <p className="text-[12.5px] font-light leading-relaxed text-[#7d7d82]">
+          Loading your provider calls…
+        </p>
+      ) : events.length === 0 ? (
         <p className="text-[12.5px] font-light leading-relaxed text-[#7d7d82]">
           Nothing to show for this window. Every provider call your agents make
           is listed here as it happens.

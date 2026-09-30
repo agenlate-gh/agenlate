@@ -41,7 +41,7 @@ export function ConsumptionChart({ series }: { series: DailyUsage[] }) {
         </p>
       )}
       <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: -4 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: -4 }}>
           <defs>
             <linearGradient id="yellowGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#FFF41F" stopOpacity={0.45} />
@@ -64,7 +64,8 @@ export function ConsumptionChart({ series }: { series: DailyUsage[] }) {
             axisLine={false}
             tickLine={false}
             tickFormatter={(value) => formatUsd(Number(value ?? 0))}
-            width={56}
+            // Wide enough for "$0.0075": narrower and the dollar sign is cut off.
+            width={68}
           />
           <Tooltip
             contentStyle={{
@@ -92,7 +93,31 @@ export function ConsumptionChart({ series }: { series: DailyUsage[] }) {
             stroke="#FFF41F"
             strokeWidth={2}
             fill="url(#yellowGradient)"
-            dot={false}
+            // A dot on each day with spending. Without one, a single active
+            // day — the usual case for a new account — is a line drawn to the
+            // chart's edge that nobody can see.
+            dot={(props: {
+              cx?: number
+              cy?: number
+              index?: number
+              payload?: { value?: number }
+            }) =>
+              // The day's own figure, not the dot's `value`, which an area
+              // series can report as a [base, top] pair that is always truthy.
+              props.payload?.value ? (
+                <circle
+                  key={props.index}
+                  cx={props.cx}
+                  cy={props.cy}
+                  r={3.5}
+                  fill="#FFF41F"
+                  stroke="#0A0A0A"
+                  strokeWidth={1}
+                />
+              ) : (
+                <g key={props.index} />
+              )
+            }
             activeDot={{ r: 5, fill: '#FFF41F', stroke: '#111111', strokeWidth: 2 }}
           />
         </AreaChart>
