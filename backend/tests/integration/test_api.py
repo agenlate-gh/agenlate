@@ -54,6 +54,30 @@ async def bob_ready(bob_db, bob):
     return bob
 
 
+class TestAFreshAccount:
+    """A user straight out of signup, with nothing prepared for them.
+
+    Every other test here uses ``alice_ready``, which creates the user's row in
+    ``public.users`` before the test starts. That is exactly the step a real
+    signup never performs, and it hid a bug: a new account's first write failed
+    a foreign key check with a 500. These tests use the raw user on purpose.
+    """
+
+    async def test_can_create_an_agent_on_its_very_first_request(
+        self, api, alice
+    ) -> None:
+        response = await api.post("/api/agents", json=AGENT, headers=auth(alice))
+
+        assert response.status_code == 201
+
+    async def test_can_create_a_room_on_its_very_first_request(
+        self, api, alice
+    ) -> None:
+        response = await api.post("/api/rooms", json=ROOM, headers=auth(alice))
+
+        assert response.status_code == 201
+
+
 class TestAuthenticationRequired:
     @pytest.mark.parametrize(
         ("method", "path"),
