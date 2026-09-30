@@ -132,6 +132,14 @@ export const accounts = {
    * The account comes back confirmed; the caller signs in with it next.
    */
   signUp: (body: SignupRequest) => api.postAnonymous<unknown>('/api/signup', body),
+
+  /**
+   * Adds an email to the Beta waitlist from the public landing page. The
+   * answer is the same whether or not the address was already on it.
+   * `website` is the hidden trap field; people never fill it in.
+   */
+  joinWaitlist: (body: { email: string; source?: string; website?: string }) =>
+    api.postAnonymous<{ message: string }>('/api/waitlist', body),
 }
 
 // -- keys and usage ---------------------------------------------------------

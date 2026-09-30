@@ -1,11 +1,12 @@
 'use client'
 
-import { Hexagon, ChevronDown, Key, LogOut } from 'lucide-react'
+import { ChevronDown, Key, LogOut } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { useAuth } from '@/components/auth-provider'
+import { AgenlateTile } from '@/components/brand'
 
 const navLinks = [
   { label: 'Lobby', href: '/lobby', active: true },
@@ -56,12 +57,10 @@ export function TopNavbar() {
     <header className="fixed top-0 left-0 right-0 z-50 flex h-[56px] items-center justify-between border-b border-[#E4E4E7] bg-[#F5F5F5] px-5 dark:border-[#262629] dark:bg-[#0A0A0A]">
       {/* Left: Logo */}
       <Link href="/lobby" className="flex items-center gap-3">
-        <div className="flex size-8 items-center justify-center rounded-md bg-[#FFF41F] text-[#111111]">
-          <Hexagon className="size-4" strokeWidth={2.5} />
-        </div>
+        <AgenlateTile />
         <span
           className="text-[17px] font-semibold tracking-tight text-[#111111] dark:text-white"
-          style={{ fontFamily: 'var(--font-poppins), ui-sans-serif, sans-serif' }}
+          style={{ fontFamily: 'var(--font-jakarta), ui-sans-serif, sans-serif' }}
         >
           agenlate
         </span>

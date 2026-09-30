@@ -3,7 +3,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/components/auth-provider'
 import { WakeBackend } from '@/components/wake-backend'
 import type { Metadata, Viewport } from 'next'
-import { Poppins } from 'next/font/google'
+import { Plus_Jakarta_Sans, Poppins } from 'next/font/google'
 import './globals.css'
 
 /**
@@ -24,19 +24,35 @@ const poppins = Poppins({
   display: 'swap',
 })
 
+// The brand typeface, per the brand kit. Used for the wordmark and the public
+// landing page; the signed-in app still sets its text in Poppins.
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-jakarta',
+  display: 'swap',
+})
+
 export const metadata: Metadata = {
-  title: 'Agenlate — AI Multi-Agent Platform',
+  metadataBase: new URL('https://agenlate.com'),
+  title: 'Agenlate — Describe the team. Watch it work.',
   description:
-    'Agenlate is a premium multi-agent orchestration console with live streaming, transparent supervisor routing, and real-time budget tracking.',
-  generator: 'v0.app',
+    'Build a team of AI agents by describing it in plain words. A Supervisor coordinates them, you watch every step, and you pay only what the models cost on your own key.',
+  openGraph: {
+    title: 'Agenlate — Describe the team. Watch it work.',
+    description:
+      'Build a team of AI agents in plain words, watch them work together, and see the cost of every step.',
+    url: 'https://agenlate.com',
+    siteName: 'Agenlate',
+    type: 'website',
+  },
 }
 
+// Dark only, matching the pages: the browser's own chrome on phones takes this
+// colour, and a light bar above a dark page reads as a rendering fault.
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f9f9f9' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
-  ],
+  colorScheme: 'dark',
+  themeColor: '#0a0a0a',
 }
 
 export default function RootLayout({
@@ -45,7 +61,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={poppins.variable} suppressHydrationWarning>
+    <html lang="en" className={`${poppins.variable} ${jakarta.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

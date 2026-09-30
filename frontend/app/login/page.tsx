@@ -40,9 +40,13 @@ export default function LoginPage() {
   // after mount rather than through useSearchParams, which would force this
   // page out of static rendering for one optional value.
   useEffect(() => {
-    const invite = new URLSearchParams(window.location.search).get('invite')
+    const params = new URLSearchParams(window.location.search)
+    const invite = params.get('invite')
     if (invite) {
       setInviteCode(invite)
+      setMode('signup')
+    } else if (params.get('mode') === 'signup') {
+      // From the landing page's "I have an invite" button.
       setMode('signup')
     }
   }, [])
