@@ -14,6 +14,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Session, User } from '@supabase/supabase-js'
 
+import { setKeyOwner } from '@/lib/byok'
 import { supabase } from '@/lib/supabase'
 
 type AuthState = {
@@ -35,6 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return
+      // Before the session is published, so nothing renders for this account
+      // while the key store still points at the previous one.
+      setKeyOwner(data.session?.user.id ?? null)
       setSession(data.session)
       setLoading(false)
     })
@@ -44,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: subscription } = supabase.auth.onAuthStateChange(
       (_event, next) => {
         if (!active) return
+        setKeyOwner(next?.user.id ?? null)
         setSession(next)
         setLoading(false)
       },

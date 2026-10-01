@@ -27,6 +27,7 @@ import { agents as agentsApi } from '@/lib/agenlate'
 import { ApiError } from '@/lib/api'
 import { readKey } from '@/lib/byok'
 import { formatUsd } from '@/lib/format'
+import { useDraft, useStored } from '@/lib/use-draft'
 import {
   DEFAULT_BUILDER_MODEL,
   builderModels,
@@ -159,14 +160,20 @@ function BuildAgent({
   agent: Agent
   onSaved: (agent: Agent) => void
 }) {
-  const [turns, setTurns] = useState<Turn[]>([])
-  const [draft, setDraft] = useState('')
+  // Kept across a reload of this tab. The conversation is not stored on the
+  // server — it is rebuilt from what the client sends each time — so if the
+  // screen crashed mid-conversation it would otherwise simply be gone.
+  const [turns, setTurns] = useStored<Turn[]>(`builder-turns:${agent.id}`, [])
+  const [draft, setDraft] = useDraft(`builder:${agent.id}`)
   const [model, setModel] = useState(DEFAULT_BUILDER_MODEL)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [spent, setSpent] = useState(0)
   /** The most recent instructions the builder proposed, pending acceptance. */
-  const [proposal, setProposal] = useState<string | null>(null)
+  const [proposal, setProposal] = useStored<string | null>(
+    `builder-proposal:${agent.id}`,
+    null,
+  )
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
 
@@ -219,8 +226,10 @@ function BuildAgent({
       setError(
         cause instanceof ApiError ? cause.message : 'The builder did not reply.',
       )
-      // The user's message stays in the feed. Removing it would lose what they
-      // typed, and they can send again without retyping it.
+      // Back into the box, so trying again is one click rather than retyping.
+      // Left in the feed it would look sent, with nothing to resend it.
+      setTurns((prev) => prev.slice(0, -1))
+      setDraft(text)
     } finally {
       setBusy(false)
     }
@@ -340,7 +349,7 @@ function BuildAgent({
                 className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#FFF41F] px-3.5 py-2 text-[12px] font-semibold text-[#0A0A0A] transition-all hover:brightness-95 disabled:opacity-60"
               >
                 {saving && <Loader2 className="size-3.5 animate-spin" />}
-                Use these instructions
+                <span>Use these instructions</span>
               </button>
             </>
           )}
@@ -555,7 +564,7 @@ function EditAgent({
           className="inline-flex items-center gap-2 rounded-lg bg-[#FFF41F] px-5 py-2 text-[13px] font-bold text-black transition-[filter] hover:brightness-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving && <Loader2 className="size-3.5 animate-spin" />}
-          Save
+          <span>Save</span>
         </button>
       </div>
     </PanelShell>
@@ -679,7 +688,7 @@ function NewAgentStudio({
             className="inline-flex items-center justify-center gap-2 self-start rounded-lg bg-[#FFF41F] px-5 py-2 text-[13px] font-bold text-black transition-[filter] hover:brightness-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {creating && <Loader2 className="size-3.5 animate-spin" />}
-            Create and build
+            <span>Create and build</span>
           </button>
         </form>
 

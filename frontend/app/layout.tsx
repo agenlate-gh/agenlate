@@ -17,6 +17,26 @@ import './globals.css'
  */
 const themeInitScript = `(function(){var root=document.documentElement;var dark=true;try{dark=window.localStorage.getItem('agenlate-theme')!=='light'}catch(e){}root.classList.toggle('dark',dark);root.style.colorScheme=dark?'dark':'light'})()`
 
+/**
+ * Keeps a translated page from crashing.
+ *
+ * Browser translation (Chrome offers it on every English page to anyone whose
+ * language is not English) replaces text nodes with elements of its own. React
+ * still holds the originals, and when it later inserts something beside one, or
+ * removes one, the browser throws: "the node before which the new node is to be
+ * inserted is not a child of this node". React treats that as fatal and the
+ * whole screen is replaced by "This page couldn't load".
+ *
+ * With these two guards the operation is carried out in the nearest sensible
+ * way instead of throwing: a removal of a node that already moved is skipped,
+ * and an insertion whose anchor moved is appended. A spinner landing after its
+ * label rather than before it is a cosmetic slip; losing the page — and
+ * whatever the person had typed into it — is not.
+ *
+ * Runs before React, in the head, so it is in place for the first render.
+ */
+const domGuardScript = `(function(){if(typeof Node!=='function'||!Node.prototype)return;var rm=Node.prototype.removeChild;Node.prototype.removeChild=function(c){if(c&&c.parentNode!==this){return c}return rm.apply(this,arguments)};var ins=Node.prototype.insertBefore;Node.prototype.insertBefore=function(n,r){if(r&&r.parentNode!==this){return ins.call(this,n,null)}return ins.apply(this,arguments)}})()`
+
 const poppins = Poppins({
   subsets: ['latin'],
   weight: ['300', '400', '500', '600', '700'],
@@ -35,7 +55,9 @@ const jakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://agenlate.com'),
-  title: 'Agenlate — Describe the team. Watch it work.',
+  // Just the name in the browser tab: with several tabs open only the first
+  // word or two is visible. The tagline lives in the link preview below.
+  title: 'Agenlate',
   description:
     'Build a team of AI agents by describing it in plain words. A Supervisor coordinates them, you watch every step, and you pay only what the models cost on your own key.',
   openGraph: {
@@ -64,6 +86,7 @@ export default function RootLayout({
     <html lang="en" className={`${poppins.variable} ${jakarta.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <script dangerouslySetInnerHTML={{ __html: domGuardScript }} />
       </head>
       <body className="font-sans antialiased overflow-hidden">
         <WakeBackend />

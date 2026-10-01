@@ -89,7 +89,7 @@ export function WaitlistForm({ source = 'landing' }: { source?: string }) {
             <Loader2 className="size-4 animate-spin" />
           ) : (
             <>
-              Join the waitlist
+              <span>Join the waitlist</span>
               <ArrowRight className="size-4" strokeWidth={2.5} />
             </>
           )}

@@ -31,6 +31,7 @@ import type { RoomDetail, RoomUsage } from '@/lib/agenlate'
 import { rooms as roomsApi, usage as usageApi } from '@/lib/agenlate'
 import { ApiError } from '@/lib/api'
 import { formatUsd } from '@/lib/format'
+import { useDraft } from '@/lib/use-draft'
 
 export default function LobbyPage() {
   return (
@@ -338,8 +339,10 @@ function CreateRoomDialog({
   onOpenChange: (open: boolean) => void
   onCreated: (room: RoomDetail) => void
 }) {
-  const [name, setName] = useState('')
-  const [objective, setObjective] = useState('')
+  // Kept if the dialog is closed or the page reloads: an objective takes
+  // thought to write, and Escape is easy to press by accident.
+  const [name, setName] = useDraft('new-room:name')
+  const [objective, setObjective] = useDraft('new-room:objective')
   const [helping, setHelping] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -357,6 +360,9 @@ function CreateRoomDialog({
         objective: objective.trim(),
         agent_ids: [],
       })
+      // Created: the draft has done its job.
+      setName('')
+      setObjective('')
       onCreated(room)
     } catch (cause) {
       setError(
@@ -372,8 +378,6 @@ function CreateRoomDialog({
       onOpenChange={(next) => {
         onOpenChange(next)
         if (!next) {
-          setName('')
-          setObjective('')
           setHelping(false)
           setError(null)
         }
@@ -456,7 +460,7 @@ function CreateRoomDialog({
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#FFF41F] px-4 py-2.5 text-[13px] font-semibold text-[#0A0A0A] transition-all hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy && <Loader2 className="size-3.5 animate-spin" />}
-              Create room
+              <span>Create room</span>
             </button>
           </div>
         </form>
@@ -527,7 +531,7 @@ function DeleteRoomDialog({
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-[13px] font-semibold text-white transition-all hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy && <Loader2 className="size-3.5 animate-spin" />}
-            Delete room
+            <span>Delete room</span>
           </button>
         </div>
       </DialogContent>

@@ -33,6 +33,26 @@ export const DEFAULT_RUN_MODEL = 'qwen/qwen3.7-flash'
 /** The default for the agent-building conversation. Matches the backend's. */
 export const DEFAULT_BUILDER_MODEL = 'qwen/qwen3.7-flash'
 
+/**
+ * The one free model offered.
+ *
+ * It costs nothing, which matters to someone trying Agenlate before adding
+ * credit: an OpenRouter account with no money in it can still run a room. The
+ * label says what that costs in other ways, because it is a lot. Measured on
+ * the same two-agent room: this model took 226 seconds where Qwen took 11, and
+ * OpenRouter limits free models to 20 requests a minute and 50 a day per
+ * account (1,000 once the account has ever bought $10 of credit).
+ *
+ * One, not several. Of three free models tried, one was refused outright and
+ * one was rate-limited by its provider; offering models that mostly fail would
+ * teach a new user that the product is unreliable.
+ */
+const FREE_MODEL: ModelChoice = {
+  value: 'nvidia/nemotron-3.5-lightning:free',
+  label: 'Nemotron 3.5 (free)',
+  tier: 'Free, but slow — and limited to 50 requests a day',
+}
+
 export const runModels: ModelChoice[] = [
   {
     value: 'qwen/qwen3.7-flash',
@@ -54,6 +74,7 @@ export const runModels: ModelChoice[] = [
     label: 'Claude Sonnet 5',
     tier: 'Strongest, costs most — $2/$10 per M',
   },
+  FREE_MODEL,
 ]
 
 /**
@@ -79,6 +100,7 @@ export const builderModels: ModelChoice[] = [
     label: 'Gemini 3.7 Flash',
     tier: 'Better at long instructions',
   },
+  FREE_MODEL,
 ]
 
 export function labelFor(models: ModelChoice[], value: string): string {

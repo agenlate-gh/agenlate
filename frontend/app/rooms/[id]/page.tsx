@@ -24,8 +24,10 @@ import type { Agent, Message, RoomDetail } from '@/lib/agenlate'
 import { agents as agentsApi, rooms as roomsApi } from '@/lib/agenlate'
 import { ApiError } from '@/lib/api'
 import { readKey } from '@/lib/byok'
-import { DEFAULT_RUN_MODEL } from '@/lib/models'
+import { DEFAULT_RUN_MODEL, runModels } from '@/lib/models'
 import { runRoom, type RunEvent } from '@/lib/run-stream'
+
+const RUN_MODEL_KEY = 'agenlate.run-model'
 
 /** What the middle column is showing. */
 type Studio =
@@ -60,6 +62,30 @@ function Room() {
   const [activity, setActivity] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const [runCost, setRunCost] = useState(0)
+
+  // Which model runs the room. Remembered in this browser, because it is a
+  // preference rather than part of the room: the same person usually wants the
+  // same trade between speed, quality and cost from one room to the next.
+  const [runModel, setRunModel] = useState(DEFAULT_RUN_MODEL)
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(RUN_MODEL_KEY)
+      // Only a model still on offer: a stored id that has since been removed
+      // from the list would fail every run with nothing on screen to explain it.
+      if (saved && runModels.some((m) => m.value === saved)) setRunModel(saved)
+    } catch {
+      // Storage blocked: the default is used.
+    }
+  }, [])
+
+  function chooseRunModel(value: string) {
+    setRunModel(value)
+    try {
+      window.localStorage.setItem(RUN_MODEL_KEY, value)
+    } catch {
+      // As above.
+    }
+  }
   /**
    * The Supervisor's question, when the last run stopped to ask one. Not an
    * error: the run did what it should, and the next step is the user's.
@@ -154,7 +180,7 @@ function Room() {
       for await (const event of runRoom({
         roomId,
         apiKey,
-        model: DEFAULT_RUN_MODEL,
+        model: runModel,
         signal: controller.signal,
       })) {
         apply(event)
@@ -403,6 +429,8 @@ function Room() {
               error={runError}
               cost={runCost}
               awaiting={awaiting}
+              model={runModel}
+              onModelChange={chooseRunModel}
               onSend={(content) => sendAndRun(content)}
               onStop={stop}
               onDismissError={() => setRunError(null)}

@@ -19,9 +19,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { agentColor, agentInitials, SUPERVISOR_COLOR } from '@/lib/agent-appearance'
 import type { Message, RoomDetail } from '@/lib/agenlate'
 import { formatUsd } from '@/lib/format'
+import { labelFor, runModels } from '@/lib/models'
+import { useDraft } from '@/lib/use-draft'
 
 export function ChatConsole({
   room,
@@ -31,6 +34,8 @@ export function ChatConsole({
   error,
   cost,
   awaiting,
+  model,
+  onModelChange,
   onSend,
   onStop,
   onDismissError,
@@ -44,13 +49,16 @@ export function ChatConsole({
   cost: number
   /** The Supervisor's question, when the last run stopped to ask one. */
   awaiting: string | null
+  /** The model the next run will use. */
+  model: string
+  onModelChange: (value: string) => void
   /** Sends what was typed (possibly nothing) and runs the room. */
   onSend: (content: string) => Promise<void>
   onStop: () => void
   onDismissError: () => void
 }) {
   const feedRef = useRef<HTMLDivElement>(null)
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useDraft(`reply:${room.id}`)
   const [sending, setSending] = useState(false)
 
   async function submit() {
@@ -173,6 +181,31 @@ export function ChatConsole({
                 }}
                 className="flex flex-col gap-2"
               >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-[#7d7d82]">
+                    Model for this run
+                  </span>
+                  <Select value={model} onValueChange={(next) => next && onModelChange(next)}>
+                    <SelectTrigger
+                      aria-label="Model for this run"
+                      className="h-8 max-w-[230px] rounded-md border border-[#16161a] bg-[#141414] px-2.5 text-[12px] font-light text-[#d4d4d8] transition-colors hover:text-white focus:border-[#FFF41F]/50 focus:ring-0"
+                    >
+                      <span className="truncate">{labelFor(runModels, model)}</span>
+                    </SelectTrigger>
+                    <SelectContent className="border-[#16161a] bg-[#141414]">
+                      {runModels.map((option) => (
+                        <SelectItem key={option.value} value={option.value} className="py-2 text-[12.5px]">
+                          <span className="flex flex-col gap-0.5">
+                            <span className="font-semibold text-white">{option.label}</span>
+                            <span className="text-[10.5px] font-light text-[#7d7d82]">
+                              {option.tier}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <textarea
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
@@ -207,11 +240,13 @@ export function ChatConsole({
                   ) : (
                     <Play className="size-3.5" strokeWidth={2.5} />
                   )}
-                  {draft.trim()
-                    ? 'Send and continue'
-                    : transcript.length === 0
-                      ? 'Start the run'
-                      : 'Continue the run'}
+                  <span>
+                    {draft.trim()
+                      ? 'Send and continue'
+                      : transcript.length === 0
+                        ? 'Start the run'
+                        : 'Continue the run'}
+                  </span>
                 </button>
               </form>
             )}

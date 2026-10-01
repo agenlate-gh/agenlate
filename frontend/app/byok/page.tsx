@@ -183,7 +183,7 @@ function Byok() {
                   className="inline-flex items-center gap-1.5 rounded-md bg-[#FFF41F] px-3.5 py-2 text-[12px] font-semibold text-[#0A0A0A] transition-all hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {checking && <Loader2 className="size-3.5 animate-spin" />}
-                  {checking ? 'Checking with OpenRouter…' : 'Check and save key'}
+                  <span>{checking ? 'Checking with OpenRouter…' : 'Check and save key'}</span>
                 </button>
               </>
             )}
@@ -264,6 +264,11 @@ function WhereItLives() {
         <li>
           Because it lives here, it does not follow you to another browser or
           device, and clearing site data removes it.
+        </li>
+        <li>
+          It is saved for your account only: someone else signing in on this
+          browser cannot use it. On a computer that is not yours, remove it
+          before you leave — signing out keeps it for your next visit.
         </li>
       </ul>
     </div>

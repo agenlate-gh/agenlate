@@ -8,11 +8,9 @@ import { useState } from 'react'
 import { useAuth } from '@/components/auth-provider'
 import { AgenlateTile } from '@/components/brand'
 
-const navLinks = [
-  { label: 'Lobby', href: '/lobby', active: true },
-  { label: 'Docs', href: '#', active: false },
-  { label: 'FAQs', href: '#', active: false },
-]
+// Docs and FAQs are not here yet because there is nothing behind them yet. A
+// link that goes nowhere reads as a broken product; they return with content.
+const navLinks = [{ label: 'Lobby', href: '/lobby', active: true }]
 
 const menuItemClass =
   'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[12.5px] text-[#52525B] transition-colors hover:bg-[#EBEBEB] hover:text-[#111111] dark:text-[#7d7d82] dark:hover:bg-[#1a1a1a] dark:hover:text-white'
