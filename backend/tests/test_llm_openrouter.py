@@ -409,3 +409,92 @@ class TestProtocolConformance:
         from agenlate.llm import LLMClient
 
         assert isinstance(make_client(), LLMClient)
+
+
+class TestModelsThatRequireReasoning:
+    """Some models reject a request with reasoning switched off.
+
+    Gemini 3.7 Flash answers 400 "Reasoning is mandatory for this endpoint and
+    cannot be disabled". It was offered in the interface and failed on every
+    call, because the client disables reasoning by default to save tokens.
+    """
+
+    REFUSAL = {
+        "error": {
+            "message": "Reasoning is mandatory for this endpoint and cannot be disabled.",
+            "code": 400,
+        }
+    }
+
+    @pytest.fixture(autouse=True)
+    def _forget_models(self, monkeypatch):
+        from agenlate.llm import openrouter
+
+        monkeypatch.setattr(openrouter, "_REASONING_MANDATORY", set())
+
+    @respx.mock
+    async def test_the_request_is_retried_without_the_instruction(self) -> None:
+        import json
+
+        route = respx.post(ENDPOINT).mock(
+            side_effect=[
+                httpx.Response(400, json=self.REFUSAL),
+                httpx.Response(200, json=completion(content="worked")),
+            ]
+        )
+
+        response = await call(make_client(model="google/gemini-3.7-flash"))
+
+        assert response.content == "worked"
+        first, second = (json.loads(c.request.content) for c in route.calls)
+        assert first["reasoning"] == {"enabled": False}
+        assert "reasoning" not in second
+
+    @respx.mock
+    async def test_the_model_is_remembered_so_later_calls_do_not_fail_first(self) -> None:
+        import json
+
+        route = respx.post(ENDPOINT).mock(
+            side_effect=[
+                httpx.Response(400, json=self.REFUSAL),
+                httpx.Response(200, json=completion()),
+                httpx.Response(200, json=completion()),
+            ]
+        )
+        client = make_client(model="google/gemini-3.7-flash")
+
+        await call(client)
+        await call(client)
+
+        assert route.call_count == 3  # one refusal, then one request per call
+        assert "reasoning" not in json.loads(route.calls[2].request.content)
+
+    @respx.mock
+    async def test_other_models_still_have_reasoning_disabled(self) -> None:
+        """Learning that one model insists on reasoning must not switch the
+        saving off for the rest."""
+        import json
+
+        route = respx.post(ENDPOINT).mock(
+            side_effect=[
+                httpx.Response(400, json=self.REFUSAL),
+                httpx.Response(200, json=completion()),
+                httpx.Response(200, json=completion()),
+            ]
+        )
+
+        await call(make_client(model="google/gemini-3.7-flash"))
+        await call(make_client(model="qwen/qwen3.7-flash"))
+
+        assert json.loads(route.calls[2].request.content)["reasoning"] == {"enabled": False}
+
+    @respx.mock
+    async def test_an_unrelated_400_is_not_retried(self) -> None:
+        route = respx.post(ENDPOINT).mock(
+            return_value=httpx.Response(400, json={"error": {"message": "Bad model id"}})
+        )
+
+        with pytest.raises(LLMError):
+            await call(make_client(model="nope/nope"))
+
+        assert route.call_count == 1

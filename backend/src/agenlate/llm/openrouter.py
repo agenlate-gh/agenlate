@@ -31,6 +31,27 @@ from .base import (
 
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 
+_REASONING_MANDATORY: set[str] = set()
+"""Models that have refused a request with reasoning disabled.
+
+Learned at run time rather than listed by hand: which models insist on
+reasoning changes as providers release them, and a hand-kept list would be
+wrong the day a new one appears. Per process, so a restart costs one refused
+(and unbilled) request per such model.
+"""
+
+
+def _refuses_disabled_reasoning(response: httpx.Response) -> bool:
+    """Whether a response is a model declining to run without reasoning."""
+    if response.status_code != 400:
+        return False
+    try:
+        error = response.json().get("error") or {}
+    except (ValueError, AttributeError):
+        return False
+    message = str(error.get("message") if isinstance(error, dict) else error).lower()
+    return "reasoning" in message and ("mandatory" in message or "cannot be disabled" in message)
+
 # Long enough for a slow model on a large context; short enough that a hung
 # provider does not hold a Render worker open indefinitely.
 DEFAULT_TIMEOUT = 120.0
@@ -140,7 +161,7 @@ class OpenRouterClient(LLMClient):
             payload["max_tokens"] = max_tokens
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
-        if not reasoning:
+        if not reasoning and self.model not in _REASONING_MANDATORY:
             # Reasoning models spend output tokens on hidden deliberation, and
             # those tokens bill at the completion rate. Measured: one model
             # consumed its entire 200-token budget reasoning and returned no
@@ -155,20 +176,18 @@ class OpenRouterClient(LLMClient):
             if max_tool_calls is not None:
                 payload["max_tool_calls"] = max_tool_calls
 
-        try:
-            response = await self._client().post(
-                ENDPOINT, json=payload, headers=self._headers()
-            )
-        except httpx.TimeoutException as exc:
-            raise LLMUnavailable(
-                self._scrub(f"OpenRouter timed out after {self._timeout}s")
-            ) from None
-        except httpx.HTTPError as exc:
-            # `from None` rather than `from exc`: the chained traceback would
-            # carry httpx's own request representation along with it.
-            raise LLMUnavailable(
-                self._scrub(f"OpenRouter request failed: {type(exc).__name__}")
-            ) from None
+        response = await self._send(payload)
+
+        if "reasoning" in payload and _refuses_disabled_reasoning(response):
+            # Some models will not run with reasoning switched off and reject
+            # the request outright — Gemini 3.7 Flash answers 400 "Reasoning is
+            # mandatory for this endpoint and cannot be disabled". For those the
+            # saving is not on offer, so the request goes again without the
+            # instruction, and the model is remembered so later calls skip the
+            # failed attempt. The refusal is not billed.
+            _REASONING_MANDATORY.add(self.model)
+            del payload["reasoning"]
+            response = await self._send(payload)
 
         if response.status_code != 200:
             raise self._fail(self._describe_failure(response), response.status_code)
@@ -179,6 +198,20 @@ class OpenRouterClient(LLMClient):
             raise self._fail("OpenRouter returned a non-JSON response") from None
 
         return self._parse(data)
+
+    async def _send(self, payload: dict[str, Any]) -> httpx.Response:
+        try:
+            return await self._client().post(ENDPOINT, json=payload, headers=self._headers())
+        except httpx.TimeoutException:
+            raise LLMUnavailable(
+                self._scrub(f"OpenRouter timed out after {self._timeout}s")
+            ) from None
+        except httpx.HTTPError as exc:
+            # `from None` rather than `from exc`: the chained traceback would
+            # carry httpx's own request representation along with it.
+            raise LLMUnavailable(
+                self._scrub(f"OpenRouter request failed: {type(exc).__name__}")
+            ) from None
 
     def _describe_failure(self, response: httpx.Response) -> str:
         """Surface the provider's own wording.
