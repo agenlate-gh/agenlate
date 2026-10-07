@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from typing import Any, TypeVar
 
+import httpx
 from postgrest.exceptions import APIError
 from pydantic import BaseModel
 
-from ..db import NotFoundError, RepositoryError
+from ..db import DatabaseUnavailable, NotFoundError, RepositoryError
 
 M = TypeVar("M", bound=BaseModel)
 
@@ -26,6 +27,12 @@ async def execute(query: Any, *, context: str) -> list[dict]:
         response = await query.execute()
     except APIError as exc:
         raise RepositoryError(f"{context}: {exc.message}") from exc
+    except httpx.HTTPError as exc:
+        # The request never got an answer: a dropped connection, a timeout, a
+        # failed TLS handshake. Left alone this surfaced as an unhandled crash
+        # with a traceback for a body. `from None` because the chained httpx
+        # error carries the request, and the request carries the user's token.
+        raise DatabaseUnavailable(f"{context}: {type(exc).__name__}") from None
     return response.data or []
 
 

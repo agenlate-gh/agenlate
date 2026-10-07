@@ -29,6 +29,15 @@ class RepositoryError(RuntimeError):
     """A database operation failed."""
 
 
+class DatabaseUnavailable(RepositoryError):
+    """The database could not be reached at all.
+
+    Separate from a query the database rejected: nothing is wrong with the
+    request, and trying again in a moment is the right response — which is
+    what the API tells the client, rather than a generic failure.
+    """
+
+
 class NotFoundError(RepositoryError):
     """The requested row does not exist, or row-level security hides it.
 

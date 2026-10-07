@@ -263,3 +263,14 @@ class TestAssembledMessages:
 
         assert EMPTY_TRANSCRIPT in messages[0]["content"]
         assert "your next decision" in messages[0]["content"].lower()
+
+
+def test_the_closing_message_is_not_asked_to_repeat_the_work() -> None:
+    """Told to "summarise the result", the Supervisor pasted the whole
+    deliverable back, so the user read it twice and paid for it twice. The
+    interface shows each agent's output in full; the closing message only has
+    to say what was produced."""
+    prompt = build_system_prompt(make_room())
+
+    assert "Do not repeat the work itself" in prompt
+    assert "Summarise the result" not in prompt

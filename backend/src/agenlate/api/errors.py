@@ -17,7 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from ..db import NotFoundError, RepositoryError
+from ..db import DatabaseUnavailable, NotFoundError, RepositoryError
 from ..llm import (
     LLMAuthError,
     LLMCreditError,
@@ -136,6 +136,19 @@ def install_error_handlers(app: FastAPI) -> None:
             status.HTTP_502_BAD_GATEWAY,
             "The model provider returned an error.",
             "provider_error",
+        )
+
+    @app.exception_handler(DatabaseUnavailable)
+    async def _database_down(request: Request, exc: DatabaseUnavailable) -> JSONResponse:
+        # Not the user's fault and not a bug in the request, so it says so and
+        # says what to do. 503 rather than 500: the condition is temporary.
+        logging.getLogger("agenlate.repository").warning(
+            "database unreachable", extra={"detail": str(exc)}
+        )
+        return _envelope(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "We could not reach the database. Nothing was lost — try again in a moment.",
+            "unavailable",
         )
 
     @app.exception_handler(RepositoryError)
