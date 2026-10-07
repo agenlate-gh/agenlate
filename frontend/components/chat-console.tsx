@@ -12,7 +12,19 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, MessageCircleQuestion, Play, Send, Square, X } from 'lucide-react'
+import {
+  ArrowUpRight,
+  FileCheck2,
+  Loader2,
+  MessageCircleQuestion,
+  Play,
+  Send,
+  Square,
+  X,
+} from 'lucide-react'
+
+import { Markdown } from '@/components/markdown'
+import { ResultDialog, type RunOutcome } from '@/components/result-dialog'
 
 import {
   Collapsible,
@@ -34,6 +46,7 @@ export function ChatConsole({
   error,
   cost,
   awaiting,
+  outcome,
   model,
   onModelChange,
   onSend,
@@ -49,6 +62,8 @@ export function ChatConsole({
   cost: number
   /** The Supervisor's question, when the last run stopped to ask one. */
   awaiting: string | null
+  /** How the last run ended, if this browser saw it end. */
+  outcome: RunOutcome
   /** The model the next run will use. */
   model: string
   onModelChange: (value: string) => void
@@ -60,6 +75,9 @@ export function ChatConsole({
   const feedRef = useRef<HTMLDivElement>(null)
   const [draft, setDraft] = useDraft(`reply:${room.id}`)
   const [sending, setSending] = useState(false)
+  const [showResult, setShowResult] = useState(false)
+  // There is something to take away as soon as any agent has produced work.
+  const hasWork = transcript.some((message) => message.emitter === 'agent')
 
   async function submit() {
     if (running || sending) return
@@ -147,6 +165,33 @@ export function ChatConsole({
                 className="shrink-0 text-[#FCA5A5] transition-opacity hover:opacity-70"
               >
                 <X className="size-3.5" />
+              </button>
+            </div>
+          )}
+
+          {hasWork && !running && (
+            <div className="shrink-0 border-t border-[#16161a] px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setShowResult(true)}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors ${
+                  outcome === 'completed'
+                    ? 'border-[#FFF41F]/50 bg-[#FFF41F]/[0.08] hover:bg-[#FFF41F]/[0.12]'
+                    : 'border-[#262629] hover:border-[#FFF41F]/40'
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <FileCheck2 className="size-4 shrink-0 text-[#FFF41F]" strokeWidth={1.75} />
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold text-white">
+                      {outcome === 'completed' ? 'The run finished — view the result' : 'View the result'}
+                    </span>
+                    <span className="block truncate text-[11px] font-light text-[#7d7d82]">
+                      Read it properly, copy it, or download it
+                    </span>
+                  </span>
+                </span>
+                <ArrowUpRight className="size-4 shrink-0 text-[#7d7d82]" />
               </button>
             </div>
           )}
@@ -263,6 +308,14 @@ export function ChatConsole({
           </div>
         </CollapsibleContent>
       </Collapsible>
+
+      <ResultDialog
+        open={showResult}
+        onOpenChange={setShowResult}
+        room={room}
+        transcript={transcript}
+        outcome={outcome}
+      />
     </section>
   )
 }
@@ -337,9 +390,9 @@ function MessageBlock({ message, room }: { message: Message; room: RoomDetail })
             })}
           </span>
         </div>
-        <p className="whitespace-pre-wrap text-[13.5px] font-light leading-relaxed text-[#8e8e93]">
+        <Markdown size="compact" className="text-[#8e8e93]">
           {message.content}
-        </p>
+        </Markdown>
       </div>
     </div>
   )

@@ -23,6 +23,7 @@ export type ApiErrorCode =
   | 'out_of_credit'
   | 'rate_limited'
   | 'provider_unavailable'
+  | 'unavailable'
   | 'provider_error'
   | 'internal_error'
   | 'network'

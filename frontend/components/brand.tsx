@@ -50,8 +50,13 @@ export function AgenlateLogo({ className }: { className?: string }) {
   return (
     <span className={`inline-flex items-center gap-2.5 ${className ?? ''}`}>
       <AgenlateTile />
+      {/* A name, not a word: browser translation turns "agenlate" into
+          something else in each language. translate="no" is the standard
+          instruction and "notranslate" is the class Google's translator
+          honours, so both are set. */}
       <span
-        className="text-[18px] font-bold tracking-[0.01em] text-white"
+        translate="no"
+        className="notranslate text-[18px] font-bold tracking-[0.01em] text-white"
         style={{ fontFamily: 'var(--font-jakarta), ui-sans-serif, sans-serif' }}
       >
         agenlate

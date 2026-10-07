@@ -18,6 +18,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { AgentPanel } from '@/components/agent-panel'
 import { RequireAuth } from '@/components/auth-provider'
 import { ChatConsole } from '@/components/chat-console'
+import type { RunOutcome } from '@/components/result-dialog'
 import { LeftSidebar } from '@/components/left-sidebar'
 import { TopNavbar } from '@/components/top-navbar'
 import type { Agent, Message, RoomDetail } from '@/lib/agenlate'
@@ -91,6 +92,8 @@ function Room() {
    * error: the run did what it should, and the next step is the user's.
    */
   const [awaiting, setAwaiting] = useState<string | null>(null)
+  /** How the last run this browser watched ended; drives the result prompt. */
+  const [outcome, setOutcome] = useState<RunOutcome>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const load = useCallback(async () => {
@@ -173,6 +176,7 @@ function Room() {
     setRunning(true)
     setRunError(null)
     setAwaiting(null)
+    setOutcome(null)
     setRunCost(0)
     setActivity('Supervisor is deciding what happens next…')
 
@@ -231,7 +235,10 @@ function Room() {
           // The question itself is already in the transcript as the
           // Supervisor's last message; this puts it next to the reply box.
           setAwaiting(event.final_message ?? event.explanation)
-        } else if (!event.succeeded) {
+          setOutcome('awaiting')
+        } else if (event.succeeded) {
+          setOutcome('completed')
+        } else {
           setRunError(event.detail ?? event.explanation)
         }
         break
@@ -429,6 +436,7 @@ function Room() {
               error={runError}
               cost={runCost}
               awaiting={awaiting}
+              outcome={outcome}
               model={runModel}
               onModelChange={chooseRunModel}
               onSend={(content) => sendAndRun(content)}

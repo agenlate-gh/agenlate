@@ -57,7 +57,8 @@ export function TopNavbar() {
       <Link href="/lobby" className="flex items-center gap-3">
         <AgenlateTile />
         <span
-          className="text-[17px] font-semibold tracking-tight text-[#111111] dark:text-white"
+          translate="no"
+          className="notranslate text-[17px] font-semibold tracking-tight text-[#111111] dark:text-white"
           style={{ fontFamily: 'var(--font-jakarta), ui-sans-serif, sans-serif' }}
         >
           agenlate
