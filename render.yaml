@@ -55,8 +55,23 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
 
-      # No OpenRouter key here on purpose. Under BYOK the key arrives per run
+      # No user's OpenRouter key here, ever. Under BYOK the key arrives per run
       # from the user's browser and is never read from configuration.
+      #
+      # This one is ours: the key a new account's few free runs are paid from.
+      # Leave it unset and free runs are off. When setting it, create a key at
+      # OpenRouter used for nothing else and give it a credit limit there.
+      - key: TRIAL_OPENROUTER_KEY
+        sync: false
+      - key: TRIAL_MODEL
+        value: qwen/qwen3.7-flash
+      - key: TRIAL_RUNS_PER_USER
+        value: "3"
+      - key: TRIAL_TOTAL_RUNS
+        value: "250"
+      - key: TRIAL_RUN_SPEND_CAP_USD
+        value: "0.08"
+
       - key: OPENROUTER_APP_URL
         value: https://agenlate.com
       - key: OPENROUTER_APP_TITLE

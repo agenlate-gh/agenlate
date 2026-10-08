@@ -131,11 +131,13 @@ class TestAuthorisation:
         assert response.status_code == 404
 
     async def test_a_missing_key_is_refused(self, api, room, alice_ready) -> None:
+        """With no trial key configured, which is how these tests run."""
         response = await api.post(
             f"/api/rooms/{room['id']}/run", json={}, headers=auth(alice_ready)
         )
 
-        assert response.status_code == 422
+        assert response.status_code == 402
+        assert response.json()["error"]["code"] == "key_required"
 
 
 class TestPausedRooms:

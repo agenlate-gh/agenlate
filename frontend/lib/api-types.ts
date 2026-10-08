@@ -360,6 +360,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Join Waitlist */
+        post: operations["join_waitlist_api_waitlist_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/client-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report Client Error */
+        post: operations["report_client_error_api_client_errors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trial Status
+         * @description How many free runs this account has left.
+         */
+        get: operations["trial_status_api_trial_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -421,11 +475,8 @@ export interface components {
         };
         /** BuilderRequest */
         BuilderRequest: {
-            /**
-             * Api Key
-             * Format: password
-             */
-            api_key: string;
+            /** Api Key */
+            api_key?: string | null;
             /** Conversation */
             conversation?: components["schemas"]["BuilderMessage"][];
             /**
@@ -450,6 +501,28 @@ export interface components {
             needs_answer: boolean;
             /** Cost Usd */
             cost_usd?: number | null;
+        };
+        /** ClientErrorReport */
+        ClientErrorReport: {
+            /** Message */
+            message: string;
+            /**
+             * Stack
+             * @default
+             */
+            stack: string;
+            /**
+             * Path
+             * @description The page it happened on.
+             * @default
+             */
+            path: string;
+            /**
+             * Digest
+             * @description Next.js error digest, if any.
+             * @default
+             */
+            digest: string;
         };
         /**
          * DailyUsage
@@ -543,11 +616,8 @@ export interface components {
         };
         /** ObjectiveRequest */
         ObjectiveRequest: {
-            /**
-             * Api Key
-             * Format: password
-             */
-            api_key: string;
+            /** Api Key */
+            api_key?: string | null;
             /** Conversation */
             conversation?: components["schemas"]["BuilderMessage"][];
             /**
@@ -692,10 +762,9 @@ export interface components {
         RunRequest: {
             /**
              * Api Key
-             * Format: password
-             * @description The caller's own OpenRouter key.
+             * @description The caller's own OpenRouter key. Left out, the run is one of the account's free trial runs, if it has any left.
              */
-            api_key: string;
+            api_key?: string | null;
             /**
              * Model
              * @default anthropic/claude-sonnet-4.5
@@ -724,6 +793,26 @@ export interface components {
              * @default Account created. Sign in with your email and password.
              */
             message: string;
+        };
+        /** TrialStatus */
+        TrialStatus: {
+            /**
+             * Enabled
+             * @description Whether free runs are on offer at all.
+             */
+            enabled: boolean;
+            /**
+             * Runs Total
+             * @description How many free runs a new account gets.
+             */
+            runs_total: number;
+            /** Runs Remaining */
+            runs_remaining: number;
+            /**
+             * Model
+             * @description The one model free runs use, when enabled.
+             */
+            model?: string | null;
         };
         /**
          * UsageEventOut
@@ -822,6 +911,29 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WaitlistRequest */
+        WaitlistRequest: {
+            /** Email */
+            email: string;
+            /**
+             * Source
+             * @default landing
+             */
+            source: string;
+            /**
+             * Website
+             * @default
+             */
+            website: string;
+        };
+        /** WaitlistResponse */
+        WaitlistResponse: {
+            /**
+             * Message
+             * @default You're on the list. We'll email you when a place opens up.
+             */
+            message: string;
         };
     };
     responses: never;
@@ -1567,6 +1679,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    join_waitlist_api_waitlist_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_client_error_api_client_errors_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientErrorReport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trial_status_api_trial_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialStatus"];
                 };
             };
         };

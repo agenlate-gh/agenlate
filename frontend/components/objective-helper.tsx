@@ -41,11 +41,9 @@ export function ObjectiveHelper({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [usedIndex, setUsedIndex] = useState<number | null>(null)
-  const [hasKey, setHasKey] = useState(true)
+  /** Set once the server says this account has nothing left to run it on. */
+  const [needsKey, setNeedsKey] = useState(false)
   const feedRef = useRef<HTMLDivElement>(null)
-
-  // Storage is read after mount: the server renders this first and has none.
-  useEffect(() => setHasKey(Boolean(readKey())), [])
 
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight })
@@ -53,8 +51,9 @@ export function ObjectiveHelper({
 
   async function send() {
     const text = draft.trim()
-    const apiKey = readKey()
-    if (!text || busy || !apiKey) return
+    // No key means the turn comes from the account's free allowance.
+    const apiKey = readKey() ?? undefined
+    if (!text || busy) return
 
     const conversation: BuilderMessage[] = [
       ...turns.map(({ role, content }) => ({ role, content })),
@@ -71,7 +70,7 @@ export function ObjectiveHelper({
         conversation,
         name: name.trim() || null,
         objective: objective.trim() || null,
-        model: DEFAULT_BUILDER_MODEL,
+        model: apiKey ? DEFAULT_BUILDER_MODEL : undefined,
       })
       setTurns((prev) => [
         ...prev,
@@ -83,20 +82,27 @@ export function ObjectiveHelper({
         },
       ])
     } catch (cause) {
-      setError(cause instanceof ApiError ? cause.message : 'The helper did not reply.')
+      if (cause instanceof ApiError && cause.needsKey) {
+        setNeedsKey(true)
+        // Back into the form's hands: what they typed is not lost.
+        setTurns((prev) => prev.slice(0, -1))
+        setDraft(text)
+      } else {
+        setError(cause instanceof ApiError ? cause.message : 'The helper did not reply.')
+      }
     } finally {
       setBusy(false)
     }
   }
 
-  if (!hasKey) {
+  if (needsKey) {
     return (
       <p className="rounded-lg border border-[#16161a] bg-[#0f0f0f] px-3.5 py-3 text-[12px] font-light leading-relaxed text-[#7d7d82]">
-        The writing helper runs on your own OpenRouter key.{' '}
+        <span>The writing helper now needs your own OpenRouter key. </span>
         <Link href="/byok" className="font-medium text-[#FFF41F] hover:opacity-80">
           Add your key
-        </Link>{' '}
-        to use it, or write the objective yourself above.
+        </Link>
+        <span> to use it, or write the objective yourself above.</span>
       </p>
     )
   }

@@ -20,6 +20,7 @@ export type ApiErrorCode =
   | 'conflict'
   | 'invalid_request'
   | 'key_rejected'
+  | 'key_required'
   | 'out_of_credit'
   | 'rate_limited'
   | 'provider_unavailable'
@@ -50,6 +51,14 @@ export class ApiError extends Error {
   /** Whether signing in again is what fixes this. */
   get needsSignIn(): boolean {
     return this.code === 'unauthenticated'
+  }
+
+  /**
+   * Whether the answer is "add your own key": no key was sent and the free
+   * runs could not cover the request.
+   */
+  get needsKey(): boolean {
+    return this.code === 'key_required'
   }
 
   /** Whether this is about the user's OpenRouter key rather than our system. */

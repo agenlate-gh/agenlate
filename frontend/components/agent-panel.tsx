@@ -186,11 +186,9 @@ function BuildAgent({
     const text = draft.trim()
     if (!text || busy) return
 
-    const apiKey = readKey()
-    if (!apiKey) {
-      setError('Add your OpenRouter key before using the builder.')
-      return
-    }
+    // No key means the turn comes from the account's free allowance; the
+    // server says so if there is none left.
+    const apiKey = readKey() ?? undefined
 
     const conversation: BuilderMessage[] = [
       ...turns.map(({ role, content }) => ({ role, content })),
@@ -207,7 +205,7 @@ function BuildAgent({
       const reply = await agentsApi.build(agent.id, {
         api_key: apiKey,
         conversation,
-        model,
+        model: apiKey ? model : undefined,
         // Sent explicitly so the builder works from what is on screen rather
         // than what was last saved.
         name: agent.name,

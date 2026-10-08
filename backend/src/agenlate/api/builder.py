@@ -15,11 +15,13 @@ from supabase import AsyncClient
 from ..agents.builder import SYSTEM_PROMPT_MAX, BuilderError, refine_agent
 from ..auth import CurrentUser, current_user
 from ..db import NotFoundError
+from ..llm import LLMAuthError, LLMCreditError
 from ..llm.openrouter import OpenRouterClient
 from ..models import NAME_MAX, ROLE_MAX
 from ..repository import agents as agents_repo
 from ..security import looks_like_openrouter_key
 from .deps import settings_for, user_db
+from .trial import ASSIST, TRIAL_DOWN, KeyRequired, claim_trial, release_trial
 
 router = APIRouter(prefix="/api/agents", tags=["builder"])
 
@@ -33,7 +35,8 @@ class BuilderMessage(BaseModel):
 
 
 class BuilderRequest(BaseModel):
-    api_key: SecretStr
+    # Left out, the turn is served from the account's free trial allowance.
+    api_key: SecretStr | None = None
     conversation: list[BuilderMessage] = Field(default_factory=list, max_length=MAX_CONVERSATION_TURNS)
     model: str = Field(default=BUILDER_DEFAULT_MODEL, min_length=1, max_length=200)
 
@@ -45,8 +48,8 @@ class BuilderRequest(BaseModel):
 
     @field_validator("api_key")
     @classmethod
-    def _shape(cls, value: SecretStr) -> SecretStr:
-        if not looks_like_openrouter_key(value.get_secret_value()):
+    def _shape(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not looks_like_openrouter_key(value.get_secret_value()):
             raise ValueError("does not look like an OpenRouter key (expected sk-or-v1-...)")
         return value
 
@@ -72,9 +75,12 @@ async def build_agent(
         raise NotFoundError(agent_id)
 
     settings = settings_for(request)
+    grant = None
+    if body.api_key is None:
+        grant = await claim_trial(settings, user.id, ASSIST)
     llm = OpenRouterClient(
-        body.api_key.get_secret_value(),
-        model=body.model,
+        grant.api_key if grant else body.api_key.get_secret_value(),
+        model=grant.model if grant else body.model,
         app_url=settings.openrouter_app_url,
         app_title=settings.openrouter_app_title,
     )
@@ -101,6 +107,13 @@ async def build_agent(
                 "Try again, or reword what you need."
             ),
         ) from None
+    except (LLMAuthError, LLMCreditError):
+        if grant is None:
+            raise
+        # Our key, not theirs: the stock message would tell the user to check
+        # a key they never entered.
+        await release_trial(settings, grant.use_id)
+        raise KeyRequired(TRIAL_DOWN) from None
     finally:
         await llm.aclose()
 

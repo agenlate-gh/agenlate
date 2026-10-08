@@ -122,7 +122,8 @@ export type RunEvent =
 
 export type RunOptions = {
   roomId: string
-  apiKey: string
+  /** The user's own key. Left out, this is one of the account's free runs. */
+  apiKey?: string
   model?: string
   maxTurns?: number
   spendCapUsd?: number
@@ -204,7 +205,7 @@ function parseFrame(frame: string): RunEvent | null {
  */
 export async function* runRoom(options: RunOptions): AsyncGenerator<RunEvent> {
   const body = {
-    api_key: options.apiKey,
+    ...(options.apiKey ? { api_key: options.apiKey } : {}),
     ...(options.model ? { model: options.model } : {}),
     ...(options.maxTurns ? { max_turns: options.maxTurns } : {}),
     ...(options.spendCapUsd ? { spend_cap_usd: options.spendCapUsd } : {}),

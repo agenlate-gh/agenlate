@@ -36,6 +36,7 @@ export type BuilderResponse = Schemas['BuilderResponse']
 export type BuilderMessage = Schemas['BuilderMessage']
 export type ObjectiveResponse = Schemas['ObjectiveResponse']
 export type SignupRequest = Schemas['SignupRequest']
+export type TrialStatus = Schemas['TrialStatus']
 
 // -- agents -----------------------------------------------------------------
 
@@ -57,7 +58,8 @@ export const agents = {
   build: (
     id: string,
     body: {
-      api_key: string
+      /** Left out, the turn comes from the account's free allowance. */
+      api_key?: string
       conversation: BuilderMessage[]
       name?: string | null
       role?: string | null
@@ -107,7 +109,8 @@ export const rooms = {
    * takes the form's current values rather than a room id.
    */
   draftObjective: (body: {
-    api_key: string
+    /** Left out, the turn comes from the account's free allowance. */
+    api_key?: string
     conversation: BuilderMessage[]
     name?: string | null
     objective?: string | null
@@ -148,6 +151,14 @@ export const keys = {
   /** Asks OpenRouter whether the key works. Runs no inference, so it is free. */
   validate: (apiKey: string) =>
     api.post<KeyCheck>('/api/keys/validate', { api_key: apiKey }),
+}
+
+export const trial = {
+  /**
+   * How many free runs this account has left. A new account gets a few runs
+   * on Agenlate's key, so it can see a room work before adding its own.
+   */
+  status: () => api.get<TrialStatus>('/api/trial'),
 }
 
 export const usage = {

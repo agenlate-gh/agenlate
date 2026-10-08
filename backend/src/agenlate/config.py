@@ -63,6 +63,24 @@ class Settings(BaseSettings):
     run_unpriced_call_limit: int = Field(default=10, gt=0)
     run_tool_rounds_per_dispatch: int = Field(default=5, gt=0)
 
+    # -- Trial runs ---------------------------------------------------------
+    # The one place a provider key of ours exists. Unset, the trial is off and
+    # every run needs the user's own key, as before. Set, a new account gets a
+    # few runs on this key. Give the key its own credit limit at OpenRouter:
+    # the counts below bound the bill by arithmetic, the key's limit bounds it
+    # whatever this code gets wrong.
+    trial_openrouter_key: SecretStr | None = None
+    trial_model: str = "qwen/qwen3.7-flash"
+    trial_runs_per_user: int = Field(default=3, gt=0)
+    trial_total_runs: int = Field(default=250, gt=0)
+    trial_run_spend_cap_usd: float = Field(default=0.08, gt=0)
+    trial_run_max_turns: int = Field(default=12, gt=0)
+    # One turn of the agent builder or the objective writer. A fraction of a
+    # cent each, so the limit is generous: it is there to stop a script, not a
+    # person.
+    trial_assists_per_user: int = Field(default=40, gt=0)
+    trial_total_assists: int = Field(default=3000, gt=0)
+
     @field_validator("supabase_url")
     @classmethod
     def _validate_supabase_url(cls, value: str) -> str:

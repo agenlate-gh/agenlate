@@ -21,8 +21,8 @@ import { ChatConsole } from '@/components/chat-console'
 import type { RunOutcome } from '@/components/result-dialog'
 import { LeftSidebar } from '@/components/left-sidebar'
 import { TopNavbar } from '@/components/top-navbar'
-import type { Agent, Message, RoomDetail } from '@/lib/agenlate'
-import { agents as agentsApi, rooms as roomsApi } from '@/lib/agenlate'
+import type { Agent, Message, RoomDetail, TrialStatus } from '@/lib/agenlate'
+import { agents as agentsApi, rooms as roomsApi, trial as trialApi } from '@/lib/agenlate'
 import { ApiError } from '@/lib/api'
 import { readKey } from '@/lib/byok'
 import { DEFAULT_RUN_MODEL, runModels } from '@/lib/models'
@@ -96,6 +96,23 @@ function Room() {
   const [outcome, setOutcome] = useState<RunOutcome>(null)
   const abortRef = useRef<AbortController | null>(null)
 
+  // Without a key of their own, a new account runs on its free allowance.
+  // Storage is read after mount: the server renders this first and has none.
+  const [hasKey, setHasKey] = useState(true)
+  const [trial, setTrial] = useState<TrialStatus | null>(null)
+  const refreshTrial = useCallback(async () => {
+    try {
+      setTrial(await trialApi.status())
+    } catch {
+      // Not worth an error on screen: the run itself says so if it is refused.
+    }
+  }, [])
+  useEffect(() => {
+    const stored = Boolean(readKey())
+    setHasKey(stored)
+    if (!stored) void refreshTrial()
+  }, [refreshTrial])
+
   const load = useCallback(async () => {
     setLoadError(null)
     try {
@@ -131,8 +148,15 @@ function Room() {
 
   /** Why a run cannot start right now, or null if it can. */
   function blockedReason(): string | null {
-    if (!readKey()) return 'Add your OpenRouter key before starting a run.'
     if (!room || room.agents.length === 0) return 'Seat at least one agent before starting a run.'
+    // Only when we know there is nothing to run on. While the free allowance
+    // is still loading the request is sent anyway, and the server decides.
+    if (!readKey() && trial) {
+      if (!trial.enabled) return 'Add your OpenRouter key before starting a run.'
+      if (trial.runs_remaining <= 0) {
+        return 'You have used your free runs. Add your OpenRouter key to keep going.'
+      }
+    }
     return null
   }
 
@@ -164,10 +188,11 @@ function Room() {
   }
 
   async function start() {
-    const apiKey = readKey()
+    // No key means a free run, on the one model free runs use.
+    const apiKey = readKey() ?? undefined
     const blocked = blockedReason()
-    if (blocked || !apiKey) {
-      setRunError(blocked ?? 'Add your OpenRouter key before starting a run.')
+    if (blocked) {
+      setRunError(blocked)
       return
     }
 
@@ -181,12 +206,22 @@ function Room() {
     setActivity('Supervisor is deciding what happens next…')
 
     try {
+      let counted = false
       for await (const event of runRoom({
         roomId,
         apiKey,
-        model: runModel,
+        model: apiKey ? runModel : undefined,
         signal: controller.signal,
       })) {
+        if (!apiKey && !counted) {
+          // The first event means the server accepted the run and took one
+          // free run for it. Shown straight away; the count is read back from
+          // the server when the run ends, which also picks up a refund.
+          counted = true
+          setTrial((prev) =>
+            prev ? { ...prev, runs_remaining: Math.max(0, prev.runs_remaining - 1) } : prev,
+          )
+        }
         apply(event)
       }
     } catch (cause) {
@@ -197,6 +232,7 @@ function Room() {
       setRunning(false)
       setActivity(null)
       abortRef.current = null
+      if (!apiKey) void refreshTrial()
     }
   }
 
@@ -438,6 +474,15 @@ function Room() {
               awaiting={awaiting}
               outcome={outcome}
               model={runModel}
+              freeRuns={
+                !hasKey && trial?.enabled
+                  ? {
+                      remaining: trial.runs_remaining,
+                      total: trial.runs_total,
+                      model: trial.model ?? DEFAULT_RUN_MODEL,
+                    }
+                  : null
+              }
               onModelChange={chooseRunModel}
               onSend={(content) => sendAndRun(content)}
               onStop={stop}

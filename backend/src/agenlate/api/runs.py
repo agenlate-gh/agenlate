@@ -12,6 +12,8 @@ logged, and not cached.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, SecretStr, field_validator
@@ -21,15 +23,16 @@ from ..auth import CurrentUser, current_user
 from ..db import NotFoundError
 from ..llm.openrouter import OpenRouterClient
 from ..models import RoomStatus
-from ..orchestrator import run_room
+from ..orchestrator import RunFinished, run_room
 from ..repository import messages as messages_repo
 from ..repository import rooms as rooms_repo
 from ..security import looks_like_openrouter_key
 from ..store import SupabaseRunStore
-from ..supervisor import RunLimits
+from ..supervisor import RunLimits, TerminationReason
 from .deps import settings_for, user_db
 from .limits import run_limiter
 from .sse import stream
+from .trial import RUN, TRIAL_DOWN, TrialGrant, claim_trial, release_trial
 
 router = APIRouter(prefix="/api/rooms", tags=["runs"])
 
@@ -44,19 +47,27 @@ class RunRequest(BaseModel):
     printing it.
     """
 
-    api_key: SecretStr = Field(description="The caller's own OpenRouter key.")
+    api_key: SecretStr | None = Field(
+        default=None,
+        description=(
+            "The caller's own OpenRouter key. Left out, the run is one of the "
+            "account's free trial runs, if it has any left."
+        ),
+    )
     model: str = Field(default=DEFAULT_MODEL, min_length=1, max_length=200)
     max_turns: int | None = Field(default=None, gt=0, le=50)
     spend_cap_usd: float | None = Field(default=None, gt=0, le=20)
 
     @field_validator("api_key")
     @classmethod
-    def _shape(cls, value: SecretStr) -> SecretStr:
+    def _shape(cls, value: SecretStr | None) -> SecretStr | None:
         """Reject an obviously malformed key before starting a run.
 
         The message never quotes the value: a validation error that echoed its
         input would put the key into the response body.
         """
+        if value is None:
+            return None
         if not looks_like_openrouter_key(value.get_secret_value()):
             raise ValueError("does not look like an OpenRouter key (expected sk-or-v1-...)")
         return value
@@ -93,40 +104,74 @@ async def start_run(
     if body.spend_cap_usd is not None:
         limits = RunLimits(**{**limits.__dict__, "spend_cap_usd": body.spend_cap_usd})
 
-    llm = OpenRouterClient(
-        body.api_key.get_secret_value(),
-        model=body.model,
-        app_url=settings.openrouter_app_url,
-        app_title=settings.openrouter_app_title,
-    )
-
     limiter = run_limiter()
     # Checked before the response starts, so a refusal is a clean 429 rather
     # than an error arriving mid-stream after the client has already been told
     # the run began.
     limiter.check(user.id)
 
+    # Last of the refusals, because it is the only one that spends something:
+    # a free run claimed for a request that was then turned away for another
+    # reason would be gone for nothing.
+    grant: TrialGrant | None = None
+    if body.api_key is None:
+        grant = await claim_trial(settings, user.id, RUN, room_id)
+        # Our money, so our ceilings: whatever the request asked for, a free
+        # run never gets more turns or more spending than the trial allows.
+        limits = replace(
+            limits,
+            max_turns=min(limits.max_turns, settings.trial_run_max_turns),
+            spend_cap_usd=min(limits.spend_cap_usd, settings.trial_run_spend_cap_usd),
+        )
+
+    llm = OpenRouterClient(
+        grant.api_key if grant else body.api_key.get_secret_value(),
+        model=grant.model if grant else body.model,
+        app_url=settings.openrouter_app_url,
+        app_title=settings.openrouter_app_title,
+    )
+
+    async def run_events():
+        async for event in run_room(
+            room,
+            transcript,
+            llm,
+            SupabaseRunStore(db),
+            limits=limits,
+            user_id=user.id,
+        ):
+            if grant and isinstance(event, RunFinished) and _was_our_failure(event):
+                # The stock explanations for these say "your key", which on a
+                # free run is ours. Say what is true, and do not charge the
+                # user a free run for it.
+                event.result.detail = TRIAL_DOWN
+                await release_trial(settings, grant.use_id)
+            yield event
+
     async def events():
         try:
             async with limiter.hold(user.id):
-                async for event in stream(
-                    run_room(
-                        room,
-                        transcript,
-                        llm,
-                        SupabaseRunStore(db),
-                        limits=limits,
-                        user_id=user.id,
-                    )
-                ):
+                async for event in stream(run_events()):
                     yield event
         finally:
             # Releases the connection pool, and drops the only reference this
             # process holds to the caller's key.
             await llm.aclose()
 
+    return _streaming(events())
+
+
+def _was_our_failure(event: RunFinished) -> bool:
+    """Whether a free run ended because our key could not pay for it."""
+    return event.result.reason in (
+        TerminationReason.KEY_REJECTED,
+        TerminationReason.OUT_OF_CREDIT,
+    )
+
+
+def _streaming(events) -> StreamingResponse:
     return StreamingResponse(
-        events(),
+        events,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

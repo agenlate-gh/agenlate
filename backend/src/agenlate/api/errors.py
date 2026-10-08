@@ -26,6 +26,7 @@ from ..llm import (
     LLMUnavailable,
 )
 from ..observability import REQUEST_ID_HEADER, current_request_id
+from .trial import KeyRequired
 
 
 class ErrorBody(BaseModel):
@@ -122,6 +123,12 @@ def install_error_handlers(app: FastAPI) -> None:
         # Deliberately indistinguishable from "belongs to someone else".
         # Confirming that a row exists but is not yours leaks its existence.
         return _envelope(status.HTTP_404_NOT_FOUND, "Not found")
+
+    @app.exception_handler(KeyRequired)
+    async def _key_required(request: Request, exc: KeyRequired) -> JSONResponse:
+        # 402 with its own code: the client sends the user to add a key, which
+        # is a different next step from every other refusal.
+        return _envelope(status.HTTP_402_PAYMENT_REQUIRED, exc.message, "key_required")
 
     @app.exception_handler(LLMError)
     async def _provider(request: Request, exc: LLMError) -> JSONResponse:

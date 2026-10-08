@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import {
   ArrowUpRight,
   FileCheck2,
@@ -48,6 +49,7 @@ export function ChatConsole({
   awaiting,
   outcome,
   model,
+  freeRuns,
   onModelChange,
   onSend,
   onStop,
@@ -66,6 +68,11 @@ export function ChatConsole({
   outcome: RunOutcome
   /** The model the next run will use. */
   model: string
+  /**
+   * Set when this account has no key of its own and runs on its free
+   * allowance instead: how much is left, and the one model free runs use.
+   */
+  freeRuns: { remaining: number; total: number; model: string } | null
   onModelChange: (value: string) => void
   /** Sends what was typed (possibly nothing) and runs the room. */
   onSend: (content: string) => Promise<void>
@@ -230,6 +237,14 @@ export function ChatConsole({
                   <span className="text-[10px] font-medium uppercase tracking-wider text-[#7d7d82]">
                     Model for this run
                   </span>
+                  {freeRuns ? (
+                    // Not a choice on a free run: we pay for it, so it runs on
+                    // the one model we chose. Shown rather than hidden, so the
+                    // user knows what produced the result.
+                    <span className="truncate text-[12px] font-light text-[#d4d4d8]">
+                      {labelFor(runModels, freeRuns.model)}
+                    </span>
+                  ) : (
                   <Select value={model} onValueChange={(next) => next && onModelChange(next)}>
                     <SelectTrigger
                       aria-label="Model for this run"
@@ -250,6 +265,7 @@ export function ChatConsole({
                       ))}
                     </SelectContent>
                   </Select>
+                  )}
                 </div>
                 <textarea
                   value={draft}
@@ -297,13 +313,26 @@ export function ChatConsole({
             )}
 
             <p className="mt-2 text-center text-[11px] font-light leading-relaxed text-[#7d7d82]">
+              <span>
               {paused
                 ? 'This room is paused. Resume it on the left to run it.'
                 : empty
                   ? 'Seat at least one agent before running.'
                   : running
                     ? 'You can reply once the run pauses or finishes.'
-                    : 'Runs use your own OpenRouter key and spend your credit.'}
+                    : freeRuns
+                      ? freeRuns.remaining > 0
+                        ? `Free runs left: ${freeRuns.remaining} of ${freeRuns.total}. `
+                        : 'You have used your free runs. '
+                      : 'Runs use your own OpenRouter key and spend your credit.'}
+              </span>
+              {freeRuns && !paused && !empty && !running && (
+                <Link href="/byok" className="font-medium text-[#FFF41F] hover:opacity-80">
+                  {freeRuns.remaining > 0
+                    ? 'Add your own key for more'
+                    : 'Add your OpenRouter key to keep going'}
+                </Link>
+              )}
             </p>
           </div>
         </CollapsibleContent>
