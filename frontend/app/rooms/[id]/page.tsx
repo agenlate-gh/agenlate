@@ -187,6 +187,22 @@ function Room() {
     await start()
   }
 
+  /**
+   * Reads the transcript back from the server after a run was cut off.
+   *
+   * Messages are saved before they are streamed, so the server can hold work
+   * this screen never received. Best effort: if this fails too, what is on
+   * screen stays as it was.
+   */
+  async function recoverTranscript() {
+    try {
+      const page = await roomsApi.messages(roomId, { limit: 200 })
+      setTranscript(page.items)
+    } catch {
+      // Nothing more to do here; the error shown for the run still stands.
+    }
+  }
+
   async function start() {
     // No key means a free run, on the one model free runs use.
     const apiKey = readKey() ?? undefined
@@ -207,6 +223,7 @@ function Room() {
 
     try {
       let counted = false
+      let finished = false
       for await (const event of runRoom({
         roomId,
         apiKey,
@@ -222,9 +239,20 @@ function Room() {
             prev ? { ...prev, runs_remaining: Math.max(0, prev.runs_remaining - 1) } : prev,
           )
         }
+        if (event.type === 'run_finished') finished = true
         apply(event)
       }
+      if (!finished && !controller.signal.aborted) {
+        // The stream closed without saying how the run ended: a dropped
+        // connection, or the server restarting underneath it. Left alone the
+        // screen just goes quiet, which reads as a run that did nothing.
+        await recoverTranscript()
+        setRunError(
+          'The connection was lost before the run finished. Anything already written is saved — run it again to carry on from there.',
+        )
+      }
     } catch (cause) {
+      if (!controller.signal.aborted) await recoverTranscript()
       setRunError(
         cause instanceof ApiError ? cause.message : 'The run stopped unexpectedly.',
       )
