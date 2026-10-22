@@ -22,7 +22,7 @@ from supabase import AsyncClient
 from ..auth import CurrentUser, current_user
 from ..db import NotFoundError
 from ..llm.openrouter import OpenRouterClient
-from ..models import RoomStatus
+from ..models import RoomStatus, RoomWithAgents
 from ..orchestrator import RunFinished, run_room
 from ..repository import messages as messages_repo
 from ..repository import rooms as rooms_repo
@@ -124,9 +124,13 @@ async def start_run(
             spend_cap_usd=min(limits.spend_cap_usd, settings.trial_run_spend_cap_usd),
         )
 
+    model = grant.model if grant else body.model
+    if is_free_model(model):
+        room = without_tools(room)
+
     llm = OpenRouterClient(
         grant.api_key if grant else body.api_key.get_secret_value(),
-        model=grant.model if grant else body.model,
+        model=model,
         app_url=settings.openrouter_app_url,
         app_title=settings.openrouter_app_title,
     )
@@ -159,6 +163,30 @@ async def start_run(
             await llm.aclose()
 
     return _streaming(events())
+
+
+FREE_MODEL_SUFFIX = ":free"
+
+
+def is_free_model(model: str) -> bool:
+    """Whether OpenRouter serves this model at no charge."""
+    return model.endswith(FREE_MODEL_SUFFIX)
+
+
+def without_tools(room: RoomWithAgents) -> RoomWithAgents:
+    """The room with every agent's web tools switched off, for this run only.
+
+    A free model is free per token, not per search: OpenRouter charges about
+    $0.007 for each web search whatever the model. Someone choosing the free
+    model is usually someone whose OpenRouter account has no credit, so the
+    first agent that searched would fail the run with "no credit left" — on
+    the one model that was meant to need none. Without tools the agents work
+    from the transcript and what the model knows, which the model picker says.
+    Nothing is saved: each agent keeps its tools for runs on other models.
+    """
+    return room.model_copy(
+        update={"agents": [a.model_copy(update={"enabled_tools": []}) for a in room.agents]}
+    )
 
 
 def _was_our_failure(event: RunFinished) -> bool:

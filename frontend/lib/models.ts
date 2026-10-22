@@ -50,7 +50,10 @@ export const DEFAULT_BUILDER_MODEL = 'qwen/qwen3.7-flash'
 const FREE_MODEL: ModelChoice = {
   value: 'nvidia/nemotron-3.5-lightning:free',
   label: 'Nemotron 3.5 (free)',
-  tier: 'Free, but slow — and limited to 50 requests a day',
+  // Agents run without web search on this model: each search is charged even
+  // on a free model, and someone choosing it usually has no credit to pay for
+  // one. The backend enforces it; this line is so it is not a surprise.
+  tier: 'Free, but slow, 50 requests a day, and agents cannot search the web',
 }
 
 export const runModels: ModelChoice[] = [

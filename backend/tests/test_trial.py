@@ -437,3 +437,39 @@ class TestHelpers:
         assert response.status_code == 402
         assert response.json()["error"]["message"] == trial_api.TRIAL_DOWN
         assert uses.count("assist") == 0
+
+
+class TestFreeModel:
+    """A free model is free per token, but each web search is still charged,
+    so on a free model agents run without their web tools."""
+
+    async def test_agents_lose_their_web_tools_on_a_free_model(self, monkeypatch, uses) -> None:
+        api = Api(settings_with(), monkeypatch, [FINISH])
+        seen = {}
+        real = runs_api.run_room
+
+        def capture(room, *args, **kwargs):
+            seen["tools"] = [a.enabled_tools for a in room.agents]
+            return real(room, *args, **kwargs)
+
+        monkeypatch.setattr(runs_api, "run_room", capture)
+
+        await api.run(api_key=USER_KEY, model="nvidia/nemotron-3.5-lightning:free")
+
+        assert seen["tools"] == [[]]
+
+    async def test_paid_models_keep_them(self, monkeypatch, uses) -> None:
+        api = Api(settings_with(), monkeypatch, [FINISH])
+        seen = {}
+        real = runs_api.run_room
+
+        def capture(room, *args, **kwargs):
+            seen["tools"] = [a.enabled_tools for a in room.agents]
+            return real(room, *args, **kwargs)
+
+        monkeypatch.setattr(runs_api, "run_room", capture)
+
+        await api.run(api_key=USER_KEY, model="qwen/qwen3.7-flash")
+
+        # None means the agent's defaults, which include web search.
+        assert seen["tools"] == [None]
