@@ -344,3 +344,16 @@ class TestOpenRouterPayload:
         _, result = await self.send(None)
 
         assert result.usage.server_tool_calls == 3
+
+
+async def test_the_agent_is_told_its_reply_is_the_deliverable() -> None:
+    """With web tools, text written between searches came back as part of the
+    answer — "Good, those three are verified. Let me now check…" — and ended up
+    in the file the user downloaded as the final result."""
+    llm = FakeLLM(["The report."])
+
+    await run(llm)
+
+    system = llm.last_call["system"]
+    assert "Begin directly with the result" in system
+    assert "between searches becomes part of the deliverable" in system

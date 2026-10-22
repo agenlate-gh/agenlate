@@ -274,3 +274,14 @@ def test_the_closing_message_is_not_asked_to_repeat_the_work() -> None:
 
     assert "Do not repeat the work itself" in prompt
     assert "Summarise the result" not in prompt
+
+
+def test_completion_is_checked_against_every_requirement() -> None:
+    """A room seated a Writer to put verified research into colloquial
+    Spanish; the Supervisor declared the objective met after the verification
+    and never called the Writer. The user got the verifier's notes."""
+    prompt = build_system_prompt(make_room())
+
+    assert "every requirement in the objective" in prompt
+    assert "not only its facts" in prompt
+    assert "is not a finished result" in prompt
