@@ -37,9 +37,9 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/** Saves text as a file through the browser's own download. */
-export function downloadText(filename: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' }))
+/** Saves a file through the browser's own download. */
+export function downloadBlob(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
   link.download = filename
@@ -49,6 +49,11 @@ export function downloadText(filename: string, text: string): void {
   // Released on the next tick: revoking in the same one can cancel the
   // download in some browsers before it has started.
   setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+/** Saves Markdown text as a .md file. */
+export function downloadText(filename: string, text: string): void {
+  downloadBlob(filename, new Blob([text], { type: 'text/markdown;charset=utf-8' }))
 }
 
 /**

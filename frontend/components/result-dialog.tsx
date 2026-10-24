@@ -16,14 +16,14 @@
  * speak was a reviewer and the thing the user wants is the draft before it.
  */
 
-import { useState } from 'react'
-import { Check, Copy, Download, FileText, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, ChevronDown, Copy, Download, FileText, Loader2, X } from 'lucide-react'
 
 import { Markdown } from '@/components/markdown'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { agentColor, agentInitials } from '@/lib/agent-appearance'
 import type { Message, RoomDetail } from '@/lib/agenlate'
-import { copyText, downloadText, fileSlug, transcriptToMarkdown } from '@/lib/export'
+import { copyText, downloadBlob, fileSlug, transcriptToMarkdown } from '@/lib/export'
 
 /** How the last run ended, when this browser saw it end. */
 export type RunOutcome = 'completed' | 'awaiting' | null
@@ -60,19 +60,13 @@ export function ResultDialog({
             </DialogDescription>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() =>
-                downloadText(
-                  `${fileSlug(room.name)}-conversation.md`,
-                  transcriptToMarkdown(room, transcript),
-                )
-              }
-              className="inline-flex items-center gap-1.5 rounded-md border border-[#262629] px-2.5 py-1.5 text-[12px] font-medium text-[#d4d4d8] transition-colors hover:text-white"
-            >
-              <FileText className="size-3.5" strokeWidth={1.75} />
-              <span>Download whole conversation</span>
-            </button>
+            <DownloadMenu
+              label="Download whole conversation"
+              icon="conversation"
+              basename={`${fileSlug(room.name)}-conversation`}
+              title={room.name}
+              markdown={transcriptToMarkdown(room, transcript)}
+            />
             <DialogClose
               aria-label="Close result"
               className="flex size-8 items-center justify-center rounded-md text-[#7d7d82] transition-colors hover:bg-[#1a1a1a] hover:text-white"
@@ -114,19 +108,12 @@ export function ResultDialog({
             <section aria-label="Final output">
               <OutputHeader message={final} room={room} badge="Final output">
                 <CopyButton text={final.content} label="Copy" />
-                <button
-                  type="button"
-                  onClick={() =>
-                    downloadText(
-                      `${fileSlug(room.name)}-${fileSlug(final.emitter_name)}.md`,
-                      final.content,
-                    )
-                  }
-                  className="inline-flex items-center gap-1.5 rounded-md border border-[#262629] px-2.5 py-1.5 text-[12px] font-medium text-[#d4d4d8] transition-colors hover:text-white"
-                >
-                  <Download className="size-3.5" strokeWidth={1.75} />
-                  <span>Download</span>
-                </button>
+                <DownloadMenu
+                  label="Download"
+                  basename={`${fileSlug(room.name)}-${fileSlug(final.emitter_name)}`}
+                  title={room.name}
+                  markdown={final.content}
+                />
               </OutputHeader>
               <div className="mt-4 rounded-xl border border-[#16161a] bg-[#111113] px-5 py-5">
                 <Markdown>{final.content}</Markdown>
@@ -255,5 +242,136 @@ function CopyButton({ text, label, quiet }: { text: string; label: string; quiet
       )}
       <span>{state === 'copied' ? 'Copied' : state === 'failed' ? 'Could not copy' : label}</span>
     </button>
+  )
+}
+
+type Format = 'docx' | 'txt' | 'md'
+
+const FORMATS: { format: Format; label: string; hint: string }[] = [
+  { format: 'docx', label: 'Word document', hint: '.docx · opens anywhere, including phones' },
+  { format: 'txt', label: 'Plain text', hint: '.txt · just the words' },
+  { format: 'md', label: 'Markdown', hint: '.md · for editors and developers' },
+]
+
+/**
+ * One button, three formats.
+ *
+ * Word first: people downloading a result mostly want to open it, and a .md
+ * file shows its # and * symbols to anyone whose phone does not know the
+ * format. The menu sits inside the dialog rather than in a portal, so focus
+ * and clicks stay within the window the user is reading.
+ */
+function DownloadMenu({
+  label,
+  icon = 'file',
+  basename,
+  title,
+  markdown,
+}: {
+  label: string
+  icon?: 'file' | 'conversation'
+  basename: string
+  title: string
+  markdown: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState<Format | null>(null)
+  const [failed, setFailed] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointer(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function onKey(event: KeyboardEvent) {
+      // Closes the menu only, not the whole result window behind it.
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        setOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', onPointer)
+    document.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      document.removeEventListener('keydown', onKey, true)
+    }
+  }, [open])
+
+  async function save(format: Format) {
+    setBusy(format)
+    setFailed(false)
+    try {
+      if (format === 'md') {
+        downloadBlob(`${basename}.md`, new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
+      } else {
+        // Loaded on demand: the converters, and the Word library above all,
+        // are large and most visits never download anything.
+        const { markdownToDocx, markdownToPlainText } = await import('@/lib/export-formats')
+        if (format === 'txt') {
+          downloadBlob(
+            `${basename}.txt`,
+            new Blob([markdownToPlainText(markdown)], { type: 'text/plain;charset=utf-8' }),
+          )
+        } else {
+          downloadBlob(`${basename}.docx`, await markdownToDocx(markdown, title))
+        }
+      }
+      setOpen(false)
+    } catch {
+      setFailed(true)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const Icon = icon === 'conversation' ? FileText : Download
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((shown) => !shown)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-md border border-[#262629] px-2.5 py-1.5 text-[12px] font-medium text-[#d4d4d8] transition-colors hover:text-white"
+      >
+        <Icon className="size-3.5" strokeWidth={1.75} />
+        <span>{label}</span>
+        <ChevronDown className="size-3.5 opacity-70" strokeWidth={1.75} />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label={`${label} as`}
+          className="absolute right-0 top-full z-20 mt-1.5 w-64 rounded-lg border border-[#262629] bg-[#141414] p-1 shadow-xl"
+        >
+          {FORMATS.map((item) => (
+            <button
+              key={item.format}
+              type="button"
+              role="menuitem"
+              disabled={busy !== null}
+              onClick={() => void save(item.format)}
+              className="flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-[#1f1f22] disabled:opacity-60"
+            >
+              <span className="mt-0.5 flex size-3.5 shrink-0 items-center justify-center">
+                {busy === item.format && <Loader2 className="size-3.5 animate-spin text-[#FFF41F]" />}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[12.5px] font-medium text-white">{item.label}</span>
+                <span className="block text-[11px] font-light text-[#7d7d82]">{item.hint}</span>
+              </span>
+            </button>
+          ))}
+          {failed && (
+            <p role="alert" className="px-2.5 py-1.5 text-[11px] font-light text-[#FCA5A5]">
+              That file could not be made. Try another format.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

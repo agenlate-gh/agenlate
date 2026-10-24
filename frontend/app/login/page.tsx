@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react'
 
@@ -139,6 +140,16 @@ export default function LoginPage() {
               </button>
             </span>
           </label>
+
+          {/* Outside the label, so the field's accessible name stays "Password". */}
+          {!isSignUp && (
+            <Link
+              href={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ''}`}
+              className="-mt-1 self-end text-[11.5px] font-medium text-[#FFF41F] transition-opacity hover:opacity-80"
+            >
+              Forgot password?
+            </Link>
+          )}
 
           {isSignUp && (
             <label className="flex flex-col gap-1.5">

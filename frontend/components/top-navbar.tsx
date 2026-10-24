@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, Key, LogOut } from 'lucide-react'
+import { ChevronDown, Key, LockKeyhole, LogOut } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -126,6 +126,10 @@ export function TopNavbar() {
                 <Link href="/byok" className={menuItemClass}>
                   <Key className="size-4" strokeWidth={1.5} />
                   API key
+                </Link>
+                <Link href="/reset-password" className={menuItemClass}>
+                  <LockKeyhole className="size-4" strokeWidth={1.5} />
+                  Change password
                 </Link>
                 <button
                   type="button"
