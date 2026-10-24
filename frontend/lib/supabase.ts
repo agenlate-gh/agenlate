@@ -18,6 +18,18 @@ import { createClient } from '@supabase/supabase-js'
 
 import { env } from './env'
 
+/**
+ * Whether this page load came from a password-reset email.
+ *
+ * Read before the client is created, because the client reads the token out
+ * of the address and then clears it. Wherever the link lands — Supabase falls
+ * back to the site's home page when the reset page is not on its list of
+ * allowed addresses — the person still has to reach the new-password form,
+ * and this is how the app knows to send them there.
+ */
+export const arrivedForPasswordRecovery =
+  typeof window !== 'undefined' && /(^|[#&?])type=recovery(&|$)/.test(window.location.hash)
+
 export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
   auth: {
     persistSession: true,

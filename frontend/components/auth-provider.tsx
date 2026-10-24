@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation'
 import type { Session, User } from '@supabase/supabase-js'
 
 import { setKeyOwner } from '@/lib/byok'
-import { supabase } from '@/lib/supabase'
+import { arrivedForPasswordRecovery, supabase } from '@/lib/supabase'
 
 type AuthState = {
   user: User | null
@@ -28,8 +28,18 @@ type AuthState = {
 const AuthContext = createContext<AuthState | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [recovering, setRecovering] = useState(arrivedForPasswordRecovery)
+
+  // A reset link signs the person in for one purpose: choosing a new
+  // password. Wherever it landed, that is where they go next.
+  useEffect(() => {
+    if (!recovering || loading || !session) return
+    setRecovering(false)
+    if (window.location.pathname !== '/reset-password') router.replace('/reset-password')
+  }, [recovering, loading, session, router])
 
   useEffect(() => {
     let active = true
@@ -46,8 +56,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Fires on sign-in, sign-out, and every token refresh. Without it a tab
     // left open past the one-hour expiry keeps a stale token in memory.
     const { data: subscription } = supabase.auth.onAuthStateChange(
-      (_event, next) => {
+      (event, next) => {
         if (!active) return
+        if (event === 'PASSWORD_RECOVERY') setRecovering(true)
         setKeyOwner(next?.user.id ?? null)
         setSession(next)
         setLoading(false)
