@@ -30,6 +30,18 @@ import { env } from './env'
 export const arrivedForPasswordRecovery =
   typeof window !== 'undefined' && /(^|[#&?])type=recovery(&|$)/.test(window.location.hash)
 
+/**
+ * Whether this page load came from an email link that had expired or was
+ * already used. Supabase sends those back with an error in the address
+ * instead of a token. Reset links are the only email links Agenlate sends,
+ * so the reset page is where to explain it.
+ */
+export const arrivedWithExpiredLink =
+  typeof window !== 'undefined' && /(^|[#&?])error_code=otp_expired(&|$)/.test(window.location.hash)
+
+/** The address fragment as the page first loaded, before the client clears it. */
+export const arrivalHash = typeof window !== 'undefined' ? window.location.hash : ''
+
 export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
   auth: {
     persistSession: true,

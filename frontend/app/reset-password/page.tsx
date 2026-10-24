@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation'
 import { Check, Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react'
 
 import { useAuth } from '@/components/auth-provider'
-import { supabase } from '@/lib/supabase'
+import { arrivalHash, supabase } from '@/lib/supabase'
 
 const MIN_LENGTH = 8
 
@@ -38,7 +38,9 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     // An expired or reused link comes back as #error=…&error_code=otp_expired.
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    // The client may already have cleared the address, so the fragment as the
+    // page first loaded is the fallback.
+    const hash = new URLSearchParams((window.location.hash || arrivalHash).replace(/^#/, ''))
     if (hash.get('error') || hash.get('error_code')) setLinkProblem(true)
   }, [])
 

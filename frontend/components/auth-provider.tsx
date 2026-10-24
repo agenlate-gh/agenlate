@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation'
 import type { Session, User } from '@supabase/supabase-js'
 
 import { setKeyOwner } from '@/lib/byok'
-import { arrivedForPasswordRecovery, supabase } from '@/lib/supabase'
+import { arrivedForPasswordRecovery, arrivedWithExpiredLink, arrivalHash, supabase } from '@/lib/supabase'
 
 type AuthState = {
   user: User | null
@@ -40,6 +40,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRecovering(false)
     if (window.location.pathname !== '/reset-password') router.replace('/reset-password')
   }, [recovering, loading, session, router])
+
+  // An expired reset link lands with an error and no session. Taken to the
+  // reset page, which reads the error and offers a new link.
+  useEffect(() => {
+    if (arrivedWithExpiredLink && window.location.pathname !== '/reset-password') {
+      router.replace(`/reset-password${arrivalHash}`)
+    }
+  }, [router])
 
   useEffect(() => {
     let active = true
