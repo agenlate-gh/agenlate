@@ -7,7 +7,7 @@ is the point: whether a code is valid is decided here, never in the browser.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from pydantic import BaseModel
 from supabase import AsyncClient
@@ -23,15 +23,22 @@ class InviteCode(BaseModel):
     created_at: datetime
     claimed_at: datetime | None = None
     claimed_by: str | None = None
+    max_uses: int = 1
+    use_count: int = 0
 
     @property
     def is_claimed(self) -> bool:
-        return self.claimed_at is not None
+        """Whether the code has no uses left."""
+        return self.use_count >= self.max_uses
 
 
-async def create_codes(client: AsyncClient, codes: list[str], label: str | None) -> list[InviteCode]:
+async def create_codes(
+    client: AsyncClient, codes: list[str], label: str | None, max_uses: int = 1
+) -> list[InviteCode]:
     rows = await execute(
-        client.table(TABLE).insert([{"code": code, "label": label} for code in codes]).select("*"),
+        client.table(TABLE)
+        .insert([{"code": code, "label": label, "max_uses": max_uses} for code in codes])
+        .select("*"),
         context="create_invite_codes",
     )
     return [InviteCode.model_validate(row) for row in rows]
@@ -46,41 +53,38 @@ async def list_codes(client: AsyncClient) -> list[InviteCode]:
 
 
 async def claim(client: AsyncClient, code: str) -> bool:
-    """Take a code if it is free. True if this call took it.
+    """Take one use of a code, if it has one left. True if this call took it.
 
-    One conditional update, so two people racing for the same code cannot both
-    win: the database applies the ``claimed_at is null`` condition and the
-    write together, and only one of them finds the row still free.
+    A database function rather than a read and a write: the check and the
+    increment happen in one statement, so two people racing for the last use
+    of a code cannot both get it.
     """
     rows = await execute(
-        client.table(TABLE)
-        .update({"claimed_at": datetime.now(timezone.utc).isoformat()})
-        .eq("code", code)
-        .is_("claimed_at", "null")
-        .select("code"),
+        client.rpc("claim_invite_code", {"p_code": code}),
         context="claim_invite_code",
     )
     return bool(rows)
 
 
 async def release(client: AsyncClient, code: str) -> None:
-    """Give a claimed code back, when the signup it was claimed for failed.
-
-    Only a code with no owner yet: one already bound to an account is spent,
-    and releasing it would let it be used twice.
-    """
+    """Give back a use taken for a signup that then failed."""
     await execute(
-        client.table(TABLE)
-        .update({"claimed_at": None})
-        .eq("code", code)
-        .is_("claimed_by", "null"),
+        client.rpc("release_invite_code", {"p_code": code}),
         context="release_invite_code",
     )
 
 
 async def bind(client: AsyncClient, code: str, user_id: str) -> None:
-    """Record which account a claimed code created."""
+    """Record the first account a code created.
+
+    Only the first: a shared code creates many accounts, and each of them
+    records its own code in its app metadata, which is where a channel's
+    sign-ups are counted from.
+    """
     await execute(
-        client.table(TABLE).update({"claimed_by": user_id}).eq("code", code),
+        client.table(TABLE)
+        .update({"claimed_by": user_id})
+        .eq("code", code)
+        .is_("claimed_by", "null"),
         context="bind_invite_code",
     )

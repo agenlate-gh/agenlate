@@ -1,6 +1,7 @@
 """Administrative commands. Run from ``backend/`` with the service key in .env.
 
     python -m agenlate.manage invites create --count 20 --label casa212
+    python -m agenlate.manage invites create --label reddit --uses 20
     python -m agenlate.manage invites list
     python -m agenlate.manage invites list --unused
     python -m agenlate.manage waitlist list
@@ -25,11 +26,15 @@ from .repository import invites as invites_repo
 from .repository import waitlist as waitlist_repo
 
 MAX_BATCH = 200
+MAX_USES = 1000  # matches the check constraint on invite_codes.max_uses
 
 
-async def _create(count: int, label: str | None) -> int:
+async def _create(count: int, label: str | None, uses: int = 1) -> int:
     if not 1 <= count <= MAX_BATCH:
         print(f"--count must be between 1 and {MAX_BATCH}", file=sys.stderr)
+        return 2
+    if not 1 <= uses <= MAX_USES:
+        print(f"--uses must be between 1 and {MAX_USES}", file=sys.stderr)
         return 2
 
     # A set, because two identical draws out of 10^18 are not going to happen
@@ -41,7 +46,7 @@ async def _create(count: int, label: str | None) -> int:
 
     client = await create_service_client(get_settings())
     try:
-        created = await invites_repo.create_codes(client, sorted(codes), label)
+        created = await invites_repo.create_codes(client, sorted(codes), label, uses)
     finally:
         await client.postgrest.aclose()
 
@@ -62,7 +67,10 @@ async def _list(unused_only: bool) -> int:
     used = sum(1 for c in codes if c.is_claimed)
     print(f"{len(codes)} code(s): {used} used, {len(codes) - used} unused\n")
     for c in shown:
-        state = f"used {c.claimed_at:%Y-%m-%d}" if c.is_claimed else "unused"
+        if c.max_uses > 1:
+            state = f"{c.use_count}/{c.max_uses} used"
+        else:
+            state = f"used {c.claimed_at:%Y-%m-%d}" if c.is_claimed else "unused"
         print(f"  {c.code}  {state:<16} {c.label or ''}")
     return 0
 
@@ -91,6 +99,10 @@ def main(argv: list[str] | None = None) -> int:
     create = action.add_parser("create", help="issue new codes")
     create.add_argument("--count", type=int, default=1)
     create.add_argument("--label", help="where these are being handed out, e.g. casa212")
+    create.add_argument(
+        "--uses", type=int, default=1,
+        help="how many accounts each code can create (a shared code for a channel)",
+    )
 
     listing = action.add_parser("list", help="show codes and whether each is used")
     listing.add_argument("--unused", action="store_true", help="only codes still available")
@@ -104,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.area == "waitlist":
         return asyncio.run(_waitlist(args.waiting))
     if args.action == "create":
-        return asyncio.run(_create(args.count, args.label))
+        return asyncio.run(_create(args.count, args.label, args.uses))
     return asyncio.run(_list(args.unused))
 
 

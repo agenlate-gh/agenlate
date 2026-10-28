@@ -204,3 +204,29 @@ class TestSignup:
         response = await api.post("/api/signup", json=body())
 
         assert response.status_code != 401
+
+
+class TestSharedCodes:
+    """A code for a community post is used by many people, up to a cap."""
+
+    def model(self, **fields):
+        from agenlate.repository.invites import InviteCode
+
+        return InviteCode.model_validate(
+            {"code": VALID, "created_at": "2026-10-28T00:00:00Z", **fields}
+        )
+
+    def test_a_personal_code_is_spent_after_one_use(self) -> None:
+        assert not self.model(use_count=0).is_claimed
+        assert self.model(use_count=1).is_claimed
+
+    def test_a_shared_code_stays_open_until_its_cap(self) -> None:
+        assert not self.model(max_uses=20, use_count=19).is_claimed
+        assert self.model(max_uses=20, use_count=20).is_claimed
+
+    async def test_the_admin_command_refuses_an_impossible_cap(self, capsys) -> None:
+        from agenlate import manage
+
+        assert await manage._create(1, "reddit", uses=0) == 2
+        assert await manage._create(1, "reddit", uses=manage.MAX_USES + 1) == 2
+        assert "--uses" in capsys.readouterr().err
