@@ -11,7 +11,17 @@ import { FeedbackButton } from '@/components/feedback-dialog'
 
 // Docs and FAQs are not here yet because there is nothing behind them yet. A
 // link that goes nowhere reads as a broken product; they return with content.
-const navLinks = [{ label: 'Lobby', href: '/lobby', active: true }]
+/**
+ * The app's sections. A single "Lobby" link used to sit here, and inside a
+ * room it read as the page's title — as if the room were the lobby. Real
+ * sections, with the current one highlighted, say where you are instead.
+ */
+const navLinks = [
+  // A room is part of Rooms: you reach it from the lobby and return there.
+  { label: 'Rooms', href: '/lobby', matches: ['/lobby', '/rooms'] },
+  { label: 'API key', href: '/byok', matches: ['/byok'] },
+  { label: 'Billing', href: '/billing', matches: ['/billing'] },
+]
 
 const menuItemClass =
   'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[12.5px] text-[#52525B] transition-colors hover:bg-[#EBEBEB] hover:text-[#111111] dark:text-[#7d7d82] dark:hover:bg-[#1a1a1a] dark:hover:text-white'
@@ -41,8 +51,6 @@ export function TopNavbar() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, signOut } = useAuth()
-
-  const isLobby = pathname === '/lobby'
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -78,8 +86,9 @@ export function TopNavbar() {
           <Link
             key={link.label}
             href={link.href}
+            aria-current={link.matches.some((prefix) => pathname.startsWith(prefix)) ? 'page' : undefined}
             className={`rounded-md px-3 py-1.5 text-[13px] font-medium tracking-tight transition-colors ${
-              (link.href === '/lobby' && isLobby) || (link.href !== '/lobby' && link.active)
+              link.matches.some((prefix) => pathname.startsWith(prefix))
                 ? 'text-[#7A6F00] dark:text-[#FFF41F]'
                 : 'text-[#52525B] hover:text-[#111111] dark:text-[#7d7d82] dark:hover:text-white'
             }`}

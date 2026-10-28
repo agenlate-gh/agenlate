@@ -33,7 +33,6 @@ alter table public.feedback force row level security;
 revoke all on public.feedback from anon, authenticated;
 grant insert on public.feedback to authenticated;
 
-drop policy if exists feedback_insert_own on public.feedback;
 create policy feedback_insert_own on public.feedback
   for insert to authenticated
   with check ((select auth.uid()) = user_id);
