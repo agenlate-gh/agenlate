@@ -7,6 +7,7 @@ import { useState } from 'react'
 
 import { useAuth } from '@/components/auth-provider'
 import { AgenlateTile } from '@/components/brand'
+import { FeedbackButton } from '@/components/feedback-dialog'
 
 // Docs and FAQs are not here yet because there is nothing behind them yet. A
 // link that goes nowhere reads as a broken product; they return with content.
@@ -88,7 +89,9 @@ export function TopNavbar() {
         ))}
       </nav>
 
-      {/* Right: User Profile — the light/dark switch lives inside the menu */}
+      {/* Right: feedback, then the user profile — the light/dark switch lives inside the menu */}
+      <div className="flex items-center gap-2">
+      <FeedbackButton />
       <div className="relative">
         <button
           type="button"
@@ -145,6 +148,7 @@ export function TopNavbar() {
             </div>
           </>
         )}
+      </div>
       </div>
     </header>
   )

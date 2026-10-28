@@ -6,6 +6,7 @@
     python -m agenlate.manage invites list --unused
     python -m agenlate.manage waitlist list
     python -m agenlate.manage waitlist list --waiting
+    python -m agenlate.manage feedback list
 
 Kept apart from ``agenlate.cli``, which runs roundtables: those need a user's
 OpenRouter key, these need the service-role key, and a single entry point
@@ -23,6 +24,7 @@ from . import invites
 from .config import get_settings
 from .db import create_service_client
 from .repository import invites as invites_repo
+from .repository._common import execute
 from .repository import waitlist as waitlist_repo
 
 MAX_BATCH = 200
@@ -89,6 +91,27 @@ async def _waitlist(waiting_only: bool) -> int:
     return 0
 
 
+async def _feedback() -> int:
+    client = await create_service_client(get_settings())
+    try:
+        rows = await execute(
+            client.table("feedback").select("question,answer,page,created_at").order("created_at", desc=True),
+            context="list_feedback",
+        )
+    finally:
+        await client.postgrest.aclose()
+
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row["question"]] = counts.get(row["question"], 0) + 1
+    summary = ", ".join(f"{q}: {n}" for q, n in sorted(counts.items())) or "none yet"
+    print(f"{len(rows)} answer(s) ({summary})\n")
+    for row in rows:
+        when = row["created_at"][:10]
+        print(f"  {when}  [{row['question']}] {row['answer']}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m agenlate.manage")
     area = parser.add_subparsers(dest="area", required=True)
@@ -112,7 +135,13 @@ def main(argv: list[str] | None = None) -> int:
     wl_list = wl_action.add_parser("list", help="show the waitlist, oldest first")
     wl_list.add_argument("--waiting", action="store_true", help="only people not yet invited")
 
+    fb = area.add_parser("feedback", help="answers from the in-app feedback form")
+    fb_action = fb.add_subparsers(dest="action", required=True)
+    fb_action.add_parser("list", help="every answer, newest first, with counts per question")
+
     args = parser.parse_args(argv)
+    if args.area == "feedback":
+        return asyncio.run(_feedback())
     if args.area == "waitlist":
         return asyncio.run(_waitlist(args.waiting))
     if args.action == "create":

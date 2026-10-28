@@ -6,6 +6,7 @@ from . import (
     agents,
     builder,
     client_errors,
+    feedback,
     keys,
     objective,
     rooms,
@@ -39,6 +40,7 @@ def install(app: FastAPI) -> None:
     app.include_router(waitlist.router)
     app.include_router(client_errors.router)
     app.include_router(trial.router)
+    app.include_router(feedback.router)
 
 
 __all__ = ["install"]

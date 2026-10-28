@@ -37,6 +37,7 @@ export type BuilderMessage = Schemas['BuilderMessage']
 export type ObjectiveResponse = Schemas['ObjectiveResponse']
 export type SignupRequest = Schemas['SignupRequest']
 export type TrialStatus = Schemas['TrialStatus']
+export type FeedbackRequest = Schemas['FeedbackRequest']
 
 // -- agents -----------------------------------------------------------------
 
@@ -159,6 +160,11 @@ export const trial = {
    * on Agenlate's key, so it can see a room work before adding its own.
    */
   status: () => api.get<TrialStatus>('/api/trial'),
+}
+
+export const feedback = {
+  /** Answers from the feedback form. Blank answers are skipped on the server. */
+  send: (body: FeedbackRequest) => api.post<{ saved: number }>('/api/feedback', body),
 }
 
 export const usage = {

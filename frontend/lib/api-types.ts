@@ -414,6 +414,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Feedback
+         * @description Store the answers the user gave. Empty ones are skipped.
+         */
+        post: operations["send_feedback_api_feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -545,6 +565,34 @@ export interface components {
          * @enum {string}
          */
         Emitter: "user" | "agent" | "supervisor" | "system";
+        /** FeedbackRequest */
+        FeedbackRequest: {
+            /**
+             * Automate
+             * @description What would you like to automate?
+             */
+            automate?: string | null;
+            /**
+             * Connect
+             * @description Which tools would you like your agents to connect to?
+             */
+            connect?: string | null;
+            /**
+             * General
+             * @description Anything else: ideas, problems, praise.
+             */
+            general?: string | null;
+            /** Page */
+            page?: string | null;
+        };
+        /** FeedbackResponse */
+        FeedbackResponse: {
+            /**
+             * Saved
+             * @description How many answers were stored.
+             */
+            saved: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1763,6 +1811,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrialStatus"];
+                };
+            };
+        };
+    };
+    send_feedback_api_feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
