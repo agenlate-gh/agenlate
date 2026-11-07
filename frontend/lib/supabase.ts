@@ -33,8 +33,8 @@ export const arrivedForPasswordRecovery =
 /**
  * Whether this page load came from an email link that had expired or was
  * already used. Supabase sends those back with an error in the address
- * instead of a token. Reset links are the only email links Agenlate sends,
- * so the reset page is where to explain it.
+ * instead of a token. Confirmation links are sent back to /login and reset
+ * links to /reset-password, and each page explains its own kind.
  */
 export const arrivedWithExpiredLink =
   typeof window !== 'undefined' && /(^|[#&?])error_code=otp_expired(&|$)/.test(window.location.hash)

@@ -11,13 +11,32 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, KeyRound, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, KeyRound, Loader2, MailCheck } from 'lucide-react'
 
 import { useAuth } from '@/components/auth-provider'
 import { accounts } from '@/lib/agenlate'
-import { supabase } from '@/lib/supabase'
+import { arrivedWithExpiredLink, supabase } from '@/lib/supabase'
 
 type Mode = 'signin' | 'signup'
+
+/**
+ * Asks Supabase to email a confirmation link, returning a message to show if
+ * it could not. Sent from the browser rather than the API so the link returns
+ * to the site the person is on — production, a preview, or localhost —
+ * without the backend having to know which.
+ */
+async function sendConfirmation(email: string): Promise<string | null> {
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
+    options: { emailRedirectTo: `${window.location.origin}/login` },
+  })
+  if (!error) return null
+  if (error.code === 'over_email_send_rate_limit' || error.status === 429) {
+    return 'An email was sent very recently. Wait a minute, then ask again.'
+  }
+  return 'The confirmation email could not be sent. Try again in a moment.'
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -30,6 +49,11 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Where the confirmation link went, once an account has been created.
+  const [sentTo, setSentTo] = useState<string | null>(null)
+  // Set when a sign-in is refused because the address is not confirmed yet.
+  const [unconfirmed, setUnconfirmed] = useState(false)
+  const [resend, setResend] = useState<'idle' | 'sending' | 'sent'>('idle')
 
   // Someone already signed in has no business here.
   useEffect(() => {
@@ -51,21 +75,47 @@ export default function LoginPage() {
       // From the landing page's "I have an invite" button.
       setMode('signup')
     }
+    // A confirmation link that has expired, or was already followed, comes
+    // back here with an error instead of a session. An already-confirmed
+    // account just signs in; one that is not is offered a fresh link.
+    if (arrivedWithExpiredLink) {
+      setError(
+        'That link has expired or was already used. Sign in, and if your email still needs confirming you can get a new link here.',
+      )
+    }
   }, [])
+
+  async function handleResend(address: string) {
+    setResend('sending')
+    const problem = await sendConfirmation(address)
+    setResend(problem ? 'idle' : 'sent')
+    setError(problem)
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     setError(null)
+    setUnconfirmed(false)
+    setResend('idle')
     setBusy(true)
 
     try {
       if (mode === 'signup') {
         // Through our API, not supabase.auth.signUp: public signup is off, and
         // the code has to be checked and spent on the server to mean anything.
-        // The account comes back confirmed, so signing in straight away works.
+        // The account comes back unconfirmed; it can sign in once its owner
+        // follows the link sent here.
         await accounts.signUp({ email, password, invite_code: inviteCode })
+        setError(await sendConfirmation(email))
+        setSentTo(email)
+        return
       }
       const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error?.code === 'email_not_confirmed') {
+        setUnconfirmed(true)
+        setError('Confirm your email address first. Open the link we sent when you signed up.')
+        return
+      }
       if (error) throw error
       router.replace('/lobby')
     } catch (cause) {
@@ -78,6 +128,53 @@ export default function LoginPage() {
   }
 
   const isSignUp = mode === 'signup'
+
+  if (sentTo) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#0a0a0a] px-6">
+        <div className="flex w-full max-w-sm flex-col items-center text-center">
+          <span className="mb-4 flex size-11 items-center justify-center rounded-xl bg-[#FFF41F]/10 text-[#FFF41F]">
+            <MailCheck className="size-5" strokeWidth={1.5} />
+          </span>
+          <h1 className="text-[20px] font-semibold tracking-tight text-white">Check your inbox</h1>
+          <p className="mt-1.5 text-[13px] font-light leading-relaxed text-[#7d7d82]">
+            We sent a confirmation link to <span className="font-medium text-white">{sentTo}</span>.
+            Open it to finish creating your account. It can take a minute, and it may land in spam.
+          </p>
+
+          {error && (
+            <p role="alert" className="mt-4 text-[12px] font-light leading-relaxed text-[#FCA5A5]">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => handleResend(sentTo)}
+            disabled={resend !== 'idle'}
+            className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg border border-[#262629] px-4 py-2.5 text-[13px] font-medium text-white transition-colors hover:border-[#FFF41F]/50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {resend === 'sending' && <Loader2 className="size-3.5 animate-spin" />}
+            <span>{resend === 'sent' ? 'Sent again' : 'Send the email again'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSentTo(null)
+              setMode('signin')
+              setPassword('')
+              setError(null)
+              setResend('idle')
+            }}
+            className="mt-4 text-[12px] font-medium text-[#FFF41F] transition-opacity hover:opacity-80"
+          >
+            Back to sign in
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-[#0a0a0a] px-6">
@@ -178,6 +275,21 @@ export default function LoginPage() {
             </p>
           )}
 
+          {unconfirmed && (
+            <button
+              type="button"
+              onClick={() => handleResend(email)}
+              disabled={resend !== 'idle'}
+              className="-mt-1 self-start text-[12px] font-medium text-[#FFF41F] transition-opacity hover:opacity-80 disabled:opacity-60"
+            >
+              {resend === 'sent'
+                ? 'Sent. Check your inbox.'
+                : resend === 'sending'
+                  ? 'Sending…'
+                  : 'Send the confirmation email again'}
+            </button>
+          )}
+
           <button
             type="submit"
             disabled={busy}
@@ -197,7 +309,8 @@ export default function LoginPage() {
             onClick={() => {
               setMode(isSignUp ? 'signin' : 'signup')
               setError(null)
-                      }}
+              setUnconfirmed(false)
+            }}
             className="font-medium text-[#FFF41F] transition-opacity hover:opacity-80"
           >
             {isSignUp ? 'Sign in' : 'Create one'}

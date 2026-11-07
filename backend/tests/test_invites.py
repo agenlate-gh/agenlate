@@ -124,14 +124,15 @@ def body(**overrides) -> dict:
 
 
 class TestSignup:
-    async def test_a_valid_code_creates_a_confirmed_account(self, api, backend) -> None:
+    async def test_a_valid_code_creates_an_unconfirmed_account(self, api, backend) -> None:
         response = await api.post("/api/signup", json=body())
 
         assert response.status_code == 201
         created = backend.admin.created[0]
         assert created["email"] == "new@example.com"
-        # Confirmed at creation, so no email is sent: the code is the proof.
-        assert created["email_confirm"] is True
+        # The code proves an invitation, not the address: the account cannot
+        # sign in until its owner follows the confirmation email.
+        assert created["email_confirm"] is False
         assert created["app_metadata"] == {"invite_code": VALID}
 
     async def test_the_code_is_spent_and_recorded(self, api, backend) -> None:

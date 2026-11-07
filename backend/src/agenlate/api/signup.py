@@ -8,10 +8,13 @@ Doing it here rather than in the browser is what makes the code a real gate.
 A check that runs only in the page can be skipped by anyone who calls
 Supabase directly with the public key.
 
-Accounts are created already confirmed, so no confirmation email is sent. The
-code is the proof that this person was invited, and it sidesteps the built-in
-mailer's limit of a couple of emails an hour, which would otherwise stall the
-third signup of any given hour.
+Accounts are created unconfirmed: the code proves this person was invited,
+not that the address is theirs. Until they follow the link in the confirmation
+email, Supabase refuses to sign them in, so an account made with a mistyped or
+invented address never becomes usable — and every account that does can be
+reached for a password reset. The browser asks Supabase to send that email
+right after this returns, so the link leads back to whichever site the person
+signed up on.
 """
 
 from __future__ import annotations
@@ -59,7 +62,7 @@ class SignupRequest(BaseModel):
 
 class SignupResponse(BaseModel):
     email: str
-    message: str = "Account created. Sign in with your email and password."
+    message: str = "Account created. Confirm your email address, then sign in."
 
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
@@ -94,7 +97,7 @@ async def signup(body: SignupRequest, request: Request) -> SignupResponse:
                 {
                     "email": body.email,
                     "password": body.password,
-                    "email_confirm": True,
+                    "email_confirm": False,
                     # app_metadata, not user_metadata: only the service role
                     # can write it, so it is a trustworthy record of how the
                     # account came to exist.

@@ -42,9 +42,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [recovering, loading, session, router])
 
   // An expired reset link lands with an error and no session. Taken to the
-  // reset page, which reads the error and offers a new link.
+  // reset page, which reads the error and offers a new link. Confirmation
+  // links return to the login page, which explains them itself.
   useEffect(() => {
-    if (arrivedWithExpiredLink && window.location.pathname !== '/reset-password') {
+    const path = window.location.pathname
+    if (arrivedWithExpiredLink && path !== '/reset-password' && path !== '/login') {
       router.replace(`/reset-password${arrivalHash}`)
     }
   }, [router])
