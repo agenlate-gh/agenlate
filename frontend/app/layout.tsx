@@ -1,4 +1,4 @@
-import { Analytics } from '@vercel/analytics/next'
+import { SiteAnalytics } from '@/components/site-analytics'
 
 import { AuthProvider } from '@/components/auth-provider'
 import { WakeBackend } from '@/components/wake-backend'
@@ -91,7 +91,7 @@ export default function RootLayout({
       <body className="font-sans antialiased overflow-hidden">
         <WakeBackend />
         <AuthProvider>{children}</AuthProvider>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        {process.env.NODE_ENV === 'production' && <SiteAnalytics />}
       </body>
     </html>
   )
