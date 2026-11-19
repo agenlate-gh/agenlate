@@ -102,7 +102,7 @@ function EmptyStudio({ hasAgents }: { hasAgents: boolean }) {
           <p className="mt-1.5 max-w-sm text-[12.5px] font-light leading-relaxed text-[#7d7d82]">
             {hasAgents
               ? 'Choose one from the left to refine what it does.'
-              : 'Use “Add New Agent” on the left to put your first worker in this room.'}
+              : 'Use “Add an agent” on the left to put your first worker in this room.'}
           </p>
         </div>
       </div>
@@ -393,10 +393,10 @@ function BuilderInput({
     <div className="relative px-5 pb-3 pt-2">
       <span
         aria-hidden
-        className="pointer-events-none absolute right-6 top-0 select-none font-mono text-[11px] font-light tabular-nums text-[#7d7d82]"
+        className="pointer-events-none absolute right-6 top-0 select-none text-[11px] font-light tabular-nums text-[#7d7d82]"
       >
-        Instructions: {instructionsLength.toLocaleString()} /{' '}
-        {MAX_INSTRUCTIONS.toLocaleString()}
+        Instructions: {instructionsLength.toLocaleString()} of{' '}
+        {MAX_INSTRUCTIONS.toLocaleString()} characters
       </span>
       <form
         onSubmit={(event) => {

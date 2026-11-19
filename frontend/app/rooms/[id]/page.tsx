@@ -1,8 +1,13 @@
 'use client'
 
 /**
- * One room: its roster on the left, the agent studio in the middle, and the
- * live transcript on the right.
+ * One room: its team on the left, and one main area that shows either the run
+ * or the agent builder.
+ *
+ * The run gets the main area by default, because the result is what people
+ * come for. The builder takes it over only while an agent is being made or
+ * changed. On a phone the team list is a third view of that same area, so
+ * every part of the room is reachable on a small screen.
  *
  * The run lives here rather than in the console that displays it. A run is the
  * thing that spends the user's money, so it has to survive the console being
@@ -56,6 +61,10 @@ function Room() {
   const [notFound, setNotFound] = useState(false)
 
   const [studio, setStudio] = useState<Studio>({ mode: 'none' })
+  /** Which view fills the main area. */
+  const [view, setView] = useState<'run' | 'team'>('run')
+  // Decided once, from the first load: an empty room starts on its team.
+  const viewChosen = useRef(false)
 
   // -- run state ------------------------------------------------------------
   const [running, setRunning] = useState(false)
@@ -122,6 +131,10 @@ function Room() {
       ])
       setRoom(detail)
       setTranscript(page.items)
+      if (!viewChosen.current) {
+        viewChosen.current = true
+        if (detail.agents.length === 0) setView('team')
+      }
       setStudio((current) =>
         current.mode === 'none' && detail.agents.length > 0
           ? { mode: 'agent', agentId: detail.agents[0].id }
@@ -364,6 +377,7 @@ function Room() {
       await roomsApi.addAgent(room.id, agent.id)
       setRoom((prev) => (prev ? { ...prev, agents: [...prev.agents, agent] } : prev))
       setStudio({ mode: 'agent', agentId: agent.id })
+      setView('team')
       return agent
     } catch (cause) {
       setRunError(
@@ -453,73 +467,143 @@ function Room() {
   }
 
   const selectedId = 'agentId' in studio ? studio.agentId : null
+  const openAgent = (next: Studio) => {
+    setStudio(next)
+    setView('team')
+  }
+
+  const sidebar = (
+    <LeftSidebar
+      room={room}
+      selectedId={selectedId}
+      runCost={runCost}
+      onSelect={(id) => openAgent({ mode: 'agent', agentId: id })}
+      onEditAgent={(id) => openAgent({ mode: 'edit', agentId: id })}
+      onAddAgent={() => openAgent({ mode: 'new' })}
+      onUnseat={(id) => void unseat(id)}
+      onStatusChange={(active) => void toggleRoomStatus(active)}
+      onDeleteRoom={() => void deleteRoom()}
+    />
+  )
 
   return (
     <div className="flex h-screen max-h-screen w-full flex-col overflow-hidden bg-[#0a0a0a] text-foreground">
       <TopNavbar />
 
       <div className="flex min-h-0 flex-1 pt-[56px]">
-        <div className="hidden md:flex">
-          <LeftSidebar
-            room={room}
-            selectedId={selectedId}
-            runCost={runCost}
-            onSelect={(id) => setStudio({ mode: 'agent', agentId: id })}
-            onEditAgent={(id) => setStudio({ mode: 'edit', agentId: id })}
-            onAddAgent={() => setStudio({ mode: 'new' })}
-            onUnseat={(id) => void unseat(id)}
-            onStatusChange={(active) => void toggleRoomStatus(active)}
-            onDeleteRoom={() => void deleteRoom()}
-          />
-        </div>
+        <div className="hidden md:flex">{sidebar}</div>
 
-        <div className="flex min-w-0 flex-1">
-          <AgentPanel
-            studio={studio}
-            room={room}
-            onClose={() =>
-              setStudio(
-                studio.mode === 'edit'
-                  ? { mode: 'agent', agentId: studio.agentId }
-                  : { mode: 'none' },
-              )
-            }
-            onCreate={createAgent}
-            onSeat={seatExisting}
-            onAgentChanged={replaceAgent}
-          />
-        </div>
-
-        {studio.mode !== 'edit' && studio.mode !== 'new' && (
-          <div className="hidden lg:flex">
-            <ChatConsole
-              room={room}
-              transcript={transcript}
-              running={running}
-              activity={activity}
-              error={runError}
-              cost={runCost}
-              awaiting={awaiting}
-              outcome={outcome}
-              model={runModel}
-              freeRuns={
-                !hasKey && trial?.enabled
-                  ? {
-                      remaining: trial.runs_remaining,
-                      total: trial.runs_total,
-                      model: trial.model ?? DEFAULT_RUN_MODEL,
-                    }
-                  : null
-              }
-              onModelChange={chooseRunModel}
-              onSend={(content) => sendAndRun(content)}
-              onStop={stop}
-              onDismissError={() => setRunError(null)}
-            />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div
+            role="tablist"
+            aria-label="Room views"
+            className="flex shrink-0 items-center gap-1 border-b border-[#16161a] px-3 py-2 sm:px-5"
+          >
+            <ViewTab selected={view === 'run'} onClick={() => setView('run')}>
+              Run
+              {running && <span className="size-1.5 rounded-full bg-green-500 pulse-dot" aria-hidden />}
+            </ViewTab>
+            <ViewTab
+              selected={view === 'team'}
+              onClick={() => {
+                // On a phone the list comes first; on a wider screen it is
+                // already beside the builder, so the open agent stays open.
+                if (window.matchMedia('(max-width: 767px)').matches) setStudio({ mode: 'none' })
+                setView('team')
+              }}
+            >
+              Team
+              <span className="text-[#7d7d82]">{room.agents.length}</span>
+            </ViewTab>
+            {view === 'team' && studio.mode !== 'none' && (
+              <button
+                type="button"
+                onClick={() => setStudio({ mode: 'none' })}
+                className="ml-auto text-[12px] font-light text-[#7d7d82] transition-colors hover:text-white md:hidden"
+              >
+                ← Team list
+              </button>
+            )}
           </div>
-        )}
+
+          <div className="flex min-h-0 flex-1">
+            {view === 'run' ? (
+              <ChatConsole
+                room={room}
+                transcript={transcript}
+                running={running}
+                activity={activity}
+                error={runError}
+                cost={runCost}
+                awaiting={awaiting}
+                outcome={outcome}
+                model={runModel}
+                freeRuns={
+                  !hasKey && trial?.enabled
+                    ? {
+                        remaining: trial.runs_remaining,
+                        total: trial.runs_total,
+                        model: trial.model ?? DEFAULT_RUN_MODEL,
+                      }
+                    : null
+                }
+                onModelChange={chooseRunModel}
+                onSend={(content) => sendAndRun(content)}
+                onStop={stop}
+                onDismissError={() => setRunError(null)}
+              />
+            ) : (
+              <>
+                {/* On a phone the team list is the first screen of this view. */}
+                {studio.mode === 'none' && (
+                  <div className="flex w-full md:hidden [&>aside]:w-full [&>aside]:border-r-0">{sidebar}</div>
+                )}
+                <div className={`min-w-0 flex-1 ${studio.mode === 'none' ? 'hidden md:flex' : 'flex'}`}>
+                  <AgentPanel
+                    studio={studio}
+                    room={room}
+                    onClose={() =>
+                      setStudio(
+                        studio.mode === 'edit'
+                          ? { mode: 'agent', agentId: studio.agentId }
+                          : { mode: 'none' },
+                      )
+                    }
+                    onCreate={createAgent}
+                    onSeat={seatExisting}
+                    onAgentChanged={replaceAgent}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
+  )
+}
+
+function ViewTab({
+  selected,
+  onClick,
+  children,
+}: {
+  selected: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+        selected ? 'bg-[#FFF41F]/10 text-[#FFF41F]' : 'text-[#7d7d82] hover:text-white'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 

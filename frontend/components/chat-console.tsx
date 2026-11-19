@@ -107,19 +107,19 @@ export function ChatConsole({
   const empty = room.agents.length === 0
 
   return (
-    <section className="flex h-full w-[420px] shrink-0 flex-col border-l border-[#16161a] bg-panel">
-      <Collapsible defaultOpen className="flex min-h-0 flex-1 flex-col">
+    <section className="flex h-full w-full min-w-0 justify-center bg-panel">
+      <Collapsible defaultOpen className="flex h-full min-h-0 w-full max-w-3xl flex-col">
         <CollapsibleTrigger className="group flex w-full shrink-0 items-center justify-between border-b border-[#16161a] px-5 py-3 text-left transition-colors hover:bg-[#141414]">
           <span className="flex items-center gap-2">
-            <span className="text-[12px] font-semibold uppercase tracking-wide text-white">
-              Live Orchestration
+            <span className="text-[13px] font-semibold text-white">
+              What the team is doing
             </span>
           </span>
           <span className="flex items-center gap-2">
             {running && (
               <span className="flex items-center gap-1.5">
                 <span className="size-1.5 rounded-full bg-green-500 pulse-dot" aria-hidden />
-                <span className="text-[10px] font-medium uppercase tracking-wider text-[#d4d4d8]">
+                <span className="text-[11px] font-medium text-[#d4d4d8]">
                   Running
                 </span>
               </span>
@@ -138,10 +138,10 @@ export function ChatConsole({
             className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-5"
           >
             {transcript.length === 0 && !running && (
-              <p className="text-[12.5px] font-light leading-relaxed text-[#7d7d82]">
-                Nothing has happened in this room yet. Start a run and the
-                Supervisor will work through the objective with the agents you
-                have seated.
+              <p className="text-[13px] font-light leading-relaxed text-[#7d7d82]">
+                Nothing has happened in this room yet. Press Start below and the
+                Supervisor will work through the goal with your team, step by
+                step, right here.
               </p>
             )}
 
@@ -234,8 +234,8 @@ export function ChatConsole({
                 className="flex flex-col gap-2"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-[#7d7d82]">
-                    Model for this run
+                  <span className="text-[12px] font-light text-[#7d7d82]">
+                    AI model
                   </span>
                   {freeRuns ? (
                     // Not a choice on a free run: we pay for it, so it runs on
@@ -315,9 +315,9 @@ export function ChatConsole({
             <p className="mt-2 text-center text-[11px] font-light leading-relaxed text-[#7d7d82]">
               <span>
               {paused
-                ? 'This room is paused. Resume it on the left to run it.'
+                ? 'This room is paused. Turn it back on next to the room name to run it.'
                 : empty
-                  ? 'Seat at least one agent before running.'
+                  ? 'Add an agent in the Team view before running.'
                   : running
                     ? 'You can reply once the run pauses or finishes.'
                     : freeRuns

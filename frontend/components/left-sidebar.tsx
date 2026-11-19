@@ -61,50 +61,47 @@ export function LeftSidebar({
           href="/lobby"
           className="flex items-center gap-2 text-[12px] font-light text-[#7d7d82] transition-colors hover:text-white"
         >
-          ← Exit to Lobby
+          ← All rooms
         </a>
       </div>
 
       <div className="border-b border-[#16161a] px-4 pb-3 pt-3.5">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-[#7d7d82]">
-            Room Metrics
+          <span className="truncate text-[14px] font-semibold text-white">
+            {room.name}
           </span>
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-light text-[#7d7d82]">
-              {active ? 'Active' : 'Paused'}
+            <span className="text-[12px] font-light text-[#7d7d82]">
+              {active ? 'Ready' : 'Paused'}
             </span>
             <Switch
               checked={active}
               onCheckedChange={onStatusChange}
               aria-label={active ? 'Pause this room' : 'Resume this room'}
+              title={active ? 'Pause this room so it cannot start runs' : 'Let this room run again'}
             />
           </div>
         </div>
         <div className="mt-1.5 flex flex-col leading-tight">
-          <span className="truncate text-[13px] font-semibold text-[#d4d4d8]">
-            {room.name}
-          </span>
-          <span className="mt-0.5 text-[11.5px] font-light text-[#7d7d82]">
-            This run:{' '}
-            <span className="font-mono font-medium tabular-nums">
+          <span className="text-[12px] font-light text-[#7d7d82]">
+            This run so far:{' '}
+            <span className="font-medium tabular-nums text-[#d4d4d8]">
               {formatUsd(runCost)}
-            </span>{' '}
-            USD
+            </span>
           </span>
         </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pt-5">
-        <span className="px-1 pb-2.5 text-[11px] font-medium uppercase tracking-wider text-[#7d7d82]">
-          AGENTS
+        <span className="px-1 pb-2.5 text-[12px] font-medium text-[#7d7d82]">
+          Your team
         </span>
 
         <div className="scrollbar-thin flex-1 space-y-0.5 overflow-y-auto">
           {room.agents.length === 0 && (
-            <p className="px-3 pb-2 text-[11.5px] font-light leading-relaxed text-[#7d7d82]">
-              No agents seated. Add one below — the Supervisor has nobody to
-              hand work to until you do.
+            <p className="px-3 pb-2 text-[12px] font-light leading-relaxed text-[#7d7d82]">
+              No agents yet. Add one below, so the Supervisor has someone to give
+              the work to.
             </p>
           )}
 
@@ -130,7 +127,7 @@ export function LeftSidebar({
               </span>
               <span className="flex min-w-0 flex-1 flex-col leading-tight">
                 <span className="truncate text-[13px] font-semibold text-[#d4d4d8]">
-                  Add New Agent
+                  Add an agent
                 </span>
                 <span className="truncate text-[11px] font-light text-[#7d7d82]">
                   Build one, or seat one you already have
@@ -145,10 +142,10 @@ export function LeftSidebar({
         <button
           type="button"
           onClick={() => setConfirmingDelete(true)}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-[13px] font-medium text-[#ef4444]/80 transition-all hover:bg-red-950/30"
+          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[12px] font-light text-[#7d7d82] transition-all hover:bg-red-950/30 hover:text-red-400"
         >
-          <Trash2 className="size-4" strokeWidth={1.5} />
-          Delete Room
+          <Trash2 className="size-3.5" strokeWidth={1.5} />
+          Delete this room
         </button>
       </div>
 

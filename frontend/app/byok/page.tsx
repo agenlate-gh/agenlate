@@ -18,7 +18,6 @@ import { useEffect, useState } from 'react'
 import { CircleOff, Eye, EyeOff, Key, Loader2, Trash2 } from 'lucide-react'
 
 import { RequireAuth } from '@/components/auth-provider'
-import { LobbySidebar } from '@/components/lobby-sidebar'
 import { TopNavbar } from '@/components/top-navbar'
 import { keys as keysApi } from '@/lib/agenlate'
 import { ApiError } from '@/lib/api'
@@ -95,21 +94,16 @@ function Byok() {
       <TopNavbar />
 
       <div className="flex min-h-0 flex-1 pt-[56px]">
-        <div className="hidden md:flex">
-          <LobbySidebar />
-        </div>
-
-        <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto pl-16 pr-6 pt-12 pb-6">
-          <div className="w-full max-w-3xl">
+        <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pt-8 pb-10 sm:px-8 sm:pt-12">
+          <div className="mx-auto w-full max-w-3xl">
             <div className="mb-10">
               <h1 className="flex items-center gap-2.5 text-[20px] font-semibold tracking-tight text-[#111111] dark:text-white">
                 <Key className="size-5 text-[#7A6F00] dark:text-[#FFF41F]" strokeWidth={1.5} />
-                BYOK Console
+                Your API key
               </h1>
               <p className="mt-1.5 max-w-2xl text-[13px] font-light leading-relaxed text-[#52525B] dark:text-[#7d7d82]">
-                Agenlate runs on your own OpenRouter key. Your agents spend your
-                credit directly, and we never take a cut of it or hold it on
-                your behalf.
+                Your agents run on your own OpenRouter key, so you pay only what
+                the AI models cost. It takes about two minutes to set up.
               </p>
             </div>
 
@@ -195,8 +189,8 @@ function Byok() {
               </p>
             )}
 
-            <WhereItLives />
             <QuickGuide />
+            <WhereItLives />
           </div>
         </div>
       </div>
@@ -248,10 +242,11 @@ function ConnectedKey({ tail, onRemove }: { tail: string; onRemove: () => void }
  */
 function WhereItLives() {
   return (
-    <div className="mt-8 rounded-lg border border-[#16161a] bg-[#111111] px-4 py-3.5">
-      <h3 className="text-[12px] font-semibold uppercase tracking-wide text-[#d4d4d8]">
-        Where this key lives
-      </h3>
+    <details className="group mt-8 rounded-lg border border-[#16161a] bg-[#111111] px-4 py-3.5">
+      <summary className="cursor-pointer list-none text-[13px] font-medium text-[#d4d4d8] marker:hidden">
+        Is my key safe? <span className="font-light text-[#7d7d82]">Yes: it stays in this browser and is never saved by Agenlate.</span>
+        <span className="ml-1 text-[#FFF41F] group-open:hidden">Read more</span>
+      </summary>
       <ul className="mt-2 space-y-1.5 text-[12px] font-light leading-relaxed text-[#7d7d82]">
         <li>
           It is stored in this browser. We never write it to our database, and
@@ -271,7 +266,7 @@ function WhereItLives() {
           before you leave — signing out keeps it for your next visit.
         </li>
       </ul>
-    </div>
+    </details>
   )
 }
 

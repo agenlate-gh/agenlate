@@ -61,33 +61,30 @@ export function TopNavbar() {
   }
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 flex h-[56px] items-center justify-between border-b border-[#E4E4E7] bg-[#F5F5F5] px-5 dark:border-[#262629] dark:bg-[#0A0A0A]">
+    <header className="fixed top-0 left-0 right-0 z-50 flex h-[56px] items-center justify-between gap-2 border-b border-[#E4E4E7] bg-[#F5F5F5] px-3 sm:px-5 dark:border-[#262629] dark:bg-[#0A0A0A]">
       {/* Left: Logo */}
-      <Link href="/lobby" className="flex items-center gap-3">
+      <Link href="/lobby" className="flex shrink-0 items-center gap-3">
         <AgenlateTile />
         <span
           translate="no"
-          className="notranslate text-[17px] font-semibold tracking-tight text-[#111111] dark:text-white"
+          className="notranslate hidden text-[17px] font-semibold sm:inline tracking-tight text-[#111111] dark:text-white"
           style={{ fontFamily: 'var(--font-jakarta), ui-sans-serif, sans-serif' }}
         >
           agenlate
         </span>
-        <span className="rounded-md border border-[#FFF41F] bg-[#FFF41F]/40 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-[#111111] dark:border-[#FFF41F]/40 dark:bg-[#FFF41F]/10 dark:text-[#FFF41F]">
+        <span className="hidden rounded-md border border-[#FFF41F] bg-[#FFF41F]/40 sm:inline px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-[#111111] dark:border-[#FFF41F]/40 dark:bg-[#FFF41F]/10 dark:text-[#FFF41F]">
           BETA
-        </span>
-        <span className="hidden rounded-md border border-[#E4E4E7] bg-white px-2 py-0.5 text-[10px] font-light text-[#52525B] sm:inline-block dark:border-[#262629] dark:bg-[#141414] dark:text-[#7d7d82]">
-          Multi-Agent Console
         </span>
       </Link>
 
       {/* Center: Nav Links */}
-      <nav className="hidden items-center gap-1 md:flex">
+      <nav aria-label="Sections" className="flex items-center gap-0.5 sm:gap-1">
         {navLinks.map((link) => (
           <Link
             key={link.label}
             href={link.href}
             aria-current={link.matches.some((prefix) => pathname.startsWith(prefix)) ? 'page' : undefined}
-            className={`rounded-md px-3 py-1.5 text-[13px] font-medium tracking-tight transition-colors ${
+            className={`whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-medium sm:px-3 tracking-tight transition-colors ${
               link.matches.some((prefix) => pathname.startsWith(prefix))
                 ? 'text-[#7A6F00] dark:text-[#FFF41F]'
                 : 'text-[#52525B] hover:text-[#111111] dark:text-[#7d7d82] dark:hover:text-white'

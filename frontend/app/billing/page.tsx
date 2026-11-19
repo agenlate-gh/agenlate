@@ -20,7 +20,6 @@ import { CreditCard, ExternalLink, Wallet } from 'lucide-react'
 
 import { RequireAuth } from '@/components/auth-provider'
 import { ConsumptionChart } from '@/components/consumption-chart'
-import { LobbySidebar } from '@/components/lobby-sidebar'
 import { TopNavbar } from '@/components/top-navbar'
 import type { DailyUsage, UsageEvent, UsageSummary } from '@/lib/agenlate'
 import { usage as usageApi } from '@/lib/agenlate'
@@ -80,12 +79,8 @@ function Billing() {
       <TopNavbar />
 
       <div className="flex min-h-0 flex-1 pt-[56px]">
-        <div className="hidden md:flex">
-          <LobbySidebar />
-        </div>
-
-        <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto pl-16 pr-6 pt-12 pb-6">
-          <div className="w-full max-w-3xl">
+        <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pt-8 pb-10 sm:px-8 sm:pt-12">
+          <div className="mx-auto w-full max-w-3xl">
             <div className="mb-10">
               <h1 className="flex items-center gap-2.5 text-[20px] font-semibold tracking-tight text-[#111111] dark:text-white">
                 <CreditCard

@@ -15,7 +15,6 @@ import { useRouter } from 'next/navigation'
 import { LayoutDashboard, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react'
 
 import { RequireAuth } from '@/components/auth-provider'
-import { LobbySidebar } from '@/components/lobby-sidebar'
 import { ObjectiveHelper } from '@/components/objective-helper'
 import { TopNavbar } from '@/components/top-navbar'
 import {
@@ -28,9 +27,10 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { agentColor, agentInitials } from '@/lib/agent-appearance'
 import type { RoomDetail, RoomUsage } from '@/lib/agenlate'
-import { rooms as roomsApi, usage as usageApi } from '@/lib/agenlate'
+import { agents as agentsApi, rooms as roomsApi, usage as usageApi } from '@/lib/agenlate'
 import { ApiError } from '@/lib/api'
 import { formatUsd } from '@/lib/format'
+import { roomTemplates, type RoomTemplate } from '@/lib/templates'
 import { useDraft } from '@/lib/use-draft'
 
 export default function LobbyPage() {
@@ -106,24 +106,20 @@ function Lobby() {
       <TopNavbar />
 
       <div className="flex min-h-0 flex-1 pt-[56px]">
-        <div className="hidden md:flex">
-          <LobbySidebar />
-        </div>
-
-        <div className="flex min-w-0 flex-1 flex-col gap-5 overflow-y-auto pl-16 pr-6 pt-12 pb-6">
-          <div className="w-full max-w-5xl">
+        <div className="flex min-w-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pt-8 pb-10 sm:px-8 sm:pt-12">
+          <div className="mx-auto w-full max-w-5xl">
             <div className="mb-10">
               <h1 className="flex items-center gap-2.5 text-[20px] font-semibold tracking-tight text-[#111111] dark:text-white">
                 <LayoutDashboard
                   className="size-5 text-[#7A6F00] dark:text-[#FFF41F]"
                   strokeWidth={1.5}
                 />
-                Multi-Agent Workspaces
+                Your rooms
               </h1>
 
               <p className="mt-1.5 max-w-2xl text-[13px] font-light leading-relaxed text-[#52525B] dark:text-[#7d7d82]">
-                Configure and manage your autonomous multi-agent environments with
-                real-time orchestration loops and live deployment tracking.
+                A room is one goal and a team of AI agents working on it. Open a
+                room to run it, or start a new one.
               </p>
             </div>
 
@@ -144,10 +140,6 @@ function Lobby() {
             )}
 
             <section>
-              <h2 className="mb-4 text-[16px] font-semibold tracking-tight text-[#111111] dark:text-white">
-                Active Agent Workspaces
-              </h2>
-
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <button
                   type="button"
@@ -158,7 +150,7 @@ function Lobby() {
                     <Plus className="size-6" strokeWidth={2.5} />
                   </span>
                   <span className="text-center text-[13px] font-semibold text-[#52525B] transition-colors group-hover:text-[#7A6F00] dark:text-[#7d7d82] dark:group-hover:text-[#FFF41F]">
-                    Deploy New Multi-Agent Room
+                    New room
                   </span>
                 </button>
 
@@ -177,8 +169,8 @@ function Lobby() {
 
               {rooms?.length === 0 && (
                 <p className="mt-6 text-[13px] font-light leading-relaxed text-[#52525B] dark:text-[#7d7d82]">
-                  No rooms yet. A room is a shared objective and the agents working
-                  on it — create one to get started.
+                  No rooms yet. Click New room and pick a ready-made team to see
+                  how it works.
                 </p>
               )}
             </section>
@@ -233,8 +225,8 @@ function RoomCard({
             className={`size-2 rounded-full ${active ? 'bg-green-500 pulse-dot' : 'bg-[#A1A1AA] dark:bg-[#7d7d82]'}`}
             aria-hidden
           />
-          <span className="text-[11px] font-light text-[#52525B] dark:text-[#7d7d82]">
-            {active ? 'Active' : 'Paused'}
+          <span className="text-[12px] font-light text-[#52525B] dark:text-[#7d7d82]">
+            {active ? 'Ready to run' : 'Paused, cannot run'}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -242,6 +234,7 @@ function RoomCard({
             checked={active}
             onCheckedChange={onToggle}
             aria-label={active ? `Pause ${room.name}` : `Resume ${room.name}`}
+            title={active ? 'Pause this room so it cannot start runs' : 'Let this room run again'}
           />
           <button
             type="button"
@@ -283,24 +276,21 @@ function RoomCard({
       </div>
 
       <div className="mb-4 inline-flex items-center gap-2">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-[#52525B] dark:text-[#7d7d82]">
-          Room Cost
+        <span className="text-[12px] font-light text-[#52525B] dark:text-[#7d7d82]">
+          Spent so far
         </span>
         <span className="font-mono text-[13px] font-semibold tabular-nums text-[#111111] dark:text-white">
           {usage && !usage.cost_is_complete && '≥ '}
           {formatUsd(cost)}
-        </span>
-        <span className="text-[10px] font-light text-[#52525B] dark:text-[#7d7d82]">
-          USD
         </span>
       </div>
 
       <div className="mt-auto">
         <Link
           href={`/rooms/${room.id}`}
-          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#52525B] transition-colors hover:text-[#7A6F00] dark:text-[#7d7d82] dark:hover:text-[#FFF41F]"
+          className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#7A6F00] transition-opacity hover:opacity-80 dark:text-[#FFF41F]"
         >
-          Enter Room →
+          Open room →
         </Link>
       </div>
     </div>
@@ -344,6 +334,9 @@ function CreateRoomDialog({
   const [name, setName] = useDraft('new-room:name')
   const [objective, setObjective] = useDraft('new-room:objective')
   const [helping, setHelping] = useState(false)
+  // The ready-made team picked, if any. Its agents are made only when the
+  // room is created, so browsing templates leaves nothing behind.
+  const [template, setTemplate] = useState<RoomTemplate | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -352,17 +345,21 @@ function CreateRoomDialog({
     setBusy(true)
     setError(null)
     try {
-      // No agents yet. Seating them happens in the room, where the user can
-      // see what each one is for — asking here would mean choosing a roster
-      // before deciding what the room is even doing.
+      // Without a template the room starts empty: seating agents happens in
+      // the room, where the user can see what each one is for. With one, its
+      // agents are made first so the room opens ready to run.
+      // One at a time, so the team keeps the template's order.
+      const made = []
+      for (const agent of template?.agents ?? []) made.push(await agentsApi.create(agent))
       const room = await roomsApi.create({
         name: name.trim(),
         objective: objective.trim(),
-        agent_ids: [],
+        agent_ids: made.map((agent) => agent.id),
       })
       // Created: the draft has done its job.
       setName('')
       setObjective('')
+      setTemplate(null)
       onCreated(room)
     } catch (cause) {
       setError(
@@ -380,17 +377,59 @@ function CreateRoomDialog({
         if (!next) {
           setHelping(false)
           setError(null)
+          setTemplate(null)
         }
       }}
     >
-      <DialogContent className={helping ? 'max-w-xl' : undefined}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogTitle>New room</DialogTitle>
         <DialogDescription>
-          A room is one objective and the agents working on it. Say what it should
-          achieve — the Supervisor works from this.
+          A room is one goal and the agents working on it. Start from a
+          ready-made team, or write your own goal.
         </DialogDescription>
 
-        <form onSubmit={submit} className="mt-5 flex flex-col gap-3">
+        <div className="mt-5">
+          <p className={LABEL_CLASS}>Start from a ready-made team</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            {roomTemplates.map((option) => {
+              const picked = template?.id === option.id
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={picked}
+                  onClick={() => {
+                    if (picked) {
+                      setTemplate(null)
+                      return
+                    }
+                    setTemplate(option)
+                    setName(option.roomName)
+                    setObjective(option.objective)
+                  }}
+                  className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                    picked
+                      ? 'border-[#FFF41F]/60 bg-[#FFF41F]/[0.06]'
+                      : 'border-[#262629] hover:border-[#FFF41F]/40'
+                  }`}
+                >
+                  <span className="block text-[13px] font-semibold text-white">{option.title}</span>
+                  <span className="mt-0.5 block text-[12px] font-light leading-snug text-[#7d7d82]">
+                    {option.summary}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          {template && (
+            <p className="mt-2 text-[12px] font-light leading-relaxed text-[#d4d4d8]">
+              Creates {template.agents.map((a) => a.name).join(' and ')} for you. Change the
+              goal below to your own topic first.
+            </p>
+          )}
+        </div>
+
+        <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
           <label className="flex flex-col gap-1.5">
             <span className={LABEL_CLASS}>Name</span>
             <input
@@ -400,14 +439,14 @@ function CreateRoomDialog({
               maxLength={200}
               autoFocus
               className={FIELD_CLASS}
-              placeholder="Production deployment review"
+              placeholder="Weekly market update"
             />
           </label>
 
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <label htmlFor="room-objective" className={LABEL_CLASS}>
-                Objective
+                Goal
               </label>
               <button
                 type="button"
@@ -427,7 +466,7 @@ function CreateRoomDialog({
               maxLength={4000}
               rows={4}
               className={`${FIELD_CLASS} resize-none leading-relaxed`}
-              placeholder="Review the release candidate for blocking issues and report what must be fixed before it ships."
+              placeholder="Find this week's most important news about electric bikes in Europe and write a one-page summary with sources."
             />
           </div>
 
