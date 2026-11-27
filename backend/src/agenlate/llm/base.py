@@ -118,6 +118,10 @@ class LLMResponse(BaseModel):
     # Tool calls the model wants executed, passed through untouched. Empty for
     # an ordinary completion.
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
+    # Addresses the provider says this answer drew on: the results of any web
+    # search it ran. Empty when nothing was searched, which is what lets a
+    # link written from memory be told apart from one that was found.
+    citations: list[str] = Field(default_factory=list)
 
     @property
     def wants_tools(self) -> bool:

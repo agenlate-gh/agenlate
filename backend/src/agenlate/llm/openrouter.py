@@ -255,6 +255,7 @@ class OpenRouterClient(LLMClient):
             model=data.get("model") or self.model,
             generation_id=data.get("id"),
             tool_calls=tool_calls,
+            citations=_citations(message.get("annotations")),
         )
 
     @staticmethod
@@ -283,6 +284,26 @@ class OpenRouterClient(LLMClient):
             cost_usd=float(cost) if cost is not None else None,
             server_tool_calls=_count_tool_use(raw.get("server_tool_use")),
         )
+
+
+def _citations(raw: Any) -> list[str]:
+    """The addresses a web search returned, from the message's annotations.
+
+    Server-side search reports its results as ``url_citation`` annotations.
+    Fetching a page does not add one, but a page is fetched because its address
+    was given, so that address is already in what the agent was told.
+    """
+    if not isinstance(raw, list):
+        return []
+    urls: list[str] = []
+    for item in raw:
+        if not isinstance(item, dict) or item.get("type") != "url_citation":
+            continue
+        citation = item.get("url_citation")
+        url = citation.get("url") if isinstance(citation, dict) else None
+        if isinstance(url, str) and url:
+            urls.append(url)
+    return urls
 
 
 def _count_tool_use(raw: Any) -> int:

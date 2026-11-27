@@ -16,7 +16,8 @@ from dataclasses import dataclass
 from ..llm import LLMClient, Usage
 from ..models import Agent, Message
 from ..supervisor.prompt import PromptBudget, render_history
-from .tools import MAX_TOOL_CALLS, build_tool_payload
+from .sources import find_links, remove_links, unsupported_links
+from .tools import MAX_TOOL_CALLS, WEB_SEARCH, build_tool_payload, resolve_tools
 
 AGENT_SYSTEM_TEMPLATE = """\
 {persona}
@@ -48,7 +49,12 @@ task needs current or verifiable information rather than answering from memory, 
 and say where anything you report came from. Do all your searching first and \
 write your reply once, at the end — any text you write between searches becomes \
 part of the deliverable. If you have no tools, work from what is already in the \
-transcript and say plainly what you could not check.\
+transcript and say plainly what you could not check.
+
+Only include a link you got from a search result, from a page you read, or from \
+the transcript and instructions above. Never write a link from memory, and \
+never guess an article's address: a link that leads nowhere is worse than no \
+link. If the task asks for sources, search before you write.\
 """
 
 AGENT_TASK_TEMPLATE = """\
@@ -70,6 +76,8 @@ class AgentResult:
     usage: Usage
     model: str = ""
     tool_rounds: int = 0
+    # Links taken out because nothing the agent searched or was given backs them.
+    removed_links: int = 0
 
     @property
     def is_empty(self) -> bool:
@@ -125,18 +133,71 @@ async def execute_agent(
     )
     tools = build_tool_payload(agent.enabled_tools)
 
-    response = await llm.complete(
-        system=system,
-        messages=messages,
-        temperature=0.7,  # agents do the creative work; the Supervisor does not
-        max_tokens=max_tokens,
-        tools=tools,
-        max_tool_calls=max_tool_calls if tools else None,
+    async def ask(conversation: list[dict[str, str]]):
+        return await llm.complete(
+            system=system,
+            messages=conversation,
+            temperature=0.7,  # agents do the creative work; the Supervisor does not
+            max_tokens=max_tokens,
+            tools=tools,
+            max_tool_calls=max_tool_calls if tools else None,
+        )
+
+    response = await ask(messages)
+    usage = response.usage
+    content = response.content.strip()
+
+    # Links the agent could legitimately use: what it was given, plus what any
+    # search on this turn returned. The full transcript, not the windowed
+    # prompt, so a source found many turns ago still counts.
+    given = find_links(
+        "\n".join(
+            [agent.system_prompt, objective, instruction]
+            + [message.content for message in transcript]
+        )
     )
+    unsupported = unsupported_links(content, given + response.citations)
+
+    # One chance to do it properly, when searching is possible at all. Paid
+    # for like any call, and recorded with the turn's usage.
+    if unsupported and WEB_SEARCH in resolve_tools(agent.enabled_tools):
+        retry = await ask(
+            messages
+            + [
+                {"role": "assistant", "content": content},
+                {"role": "user", "content": _unsourced_note(unsupported)},
+            ]
+        )
+        usage = usage + retry.usage
+        if retry.content.strip():
+            content = retry.content.strip()
+        unsupported = unsupported_links(
+            content, given + response.citations + retry.citations
+        )
+
+    if unsupported:
+        content = remove_links(content, unsupported)
+        noun = "link was" if len(unsupported) == 1 else "links were"
+        content += (
+            f"\n\n_{len(unsupported)} {noun} removed because they did not come "
+            "from a search or a page the agent read._"
+        )
 
     return AgentResult(
-        content=response.content.strip(),
-        usage=response.usage,
+        content=content,
+        usage=usage,
         model=response.model,
-        tool_rounds=response.usage.server_tool_calls,
+        tool_rounds=usage.server_tool_calls,
+        removed_links=len(unsupported),
+    )
+
+
+def _unsourced_note(links: list[str]) -> str:
+    listed = "\n".join(f"- {url}" for url in links[:10])
+    return (
+        "These links in your reply did not come from a search you ran, a page "
+        f"you read, or the transcript:\n{listed}\n\n"
+        "Search the web now and rewrite your reply using only links from your "
+        "results. Remove any claim or link you cannot back up. Reply with the "
+        "complete corrected result only."
     )
